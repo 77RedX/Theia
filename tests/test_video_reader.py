@@ -11,6 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from video_engine import VideoReader
 
+from collections.abc import Generator
+
 
 @pytest.fixture
 def sample_video_path() -> Path:
@@ -20,12 +22,17 @@ def sample_video_path() -> Path:
 
 
 @pytest.fixture
-def loaded_reader(sample_video_path: Path) -> VideoReader:
+def loaded_reader(
+    sample_video_path: Path,
+) -> Generator[VideoReader, None, None]:
     """Return a loaded reader and ensure its resources are released."""
 
     reader = VideoReader(sample_video_path)
+
     if not reader.load_video():
-        pytest.fail(f"Failed to load sample video: {sample_video_path}")
+        pytest.fail(
+            f"Failed to load sample video: {sample_video_path}"
+        )
 
     try:
         yield reader

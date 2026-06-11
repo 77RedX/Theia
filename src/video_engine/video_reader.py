@@ -51,6 +51,7 @@ class VideoReader:
         """Return the video's frames per second."""
 
         self._ensure_loaded()
+        assert self._capture is not None
         fps = float(self._capture.get(cv2.CAP_PROP_FPS))
         return fps
 
@@ -58,6 +59,7 @@ class VideoReader:
         """Return the video's width and height in pixels."""
 
         self._ensure_loaded()
+        assert self._capture is not None
         width = int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         return width, height
@@ -66,6 +68,7 @@ class VideoReader:
         """Return the total number of frames in the loaded video."""
 
         self._ensure_loaded()
+        assert self._capture is not None
         frame_count = int(self._capture.get(cv2.CAP_PROP_FRAME_COUNT))
         return frame_count
 
