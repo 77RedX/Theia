@@ -50,26 +50,23 @@ class VideoReader:
     def get_fps(self) -> float:
         """Return the video's frames per second."""
 
-        self._ensure_loaded()
-        assert self._capture is not None
-        fps = float(self._capture.get(cv2.CAP_PROP_FPS))
+        capture = self._get_capture()
+        fps = float(capture.get(cv2.CAP_PROP_FPS))
         return fps
 
     def get_resolution(self) -> tuple[int, int]:
         """Return the video's width and height in pixels."""
 
-        self._ensure_loaded()
-        assert self._capture is not None
-        width = int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        capture = self._get_capture()
+        width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         return width, height
 
     def get_frame_count(self) -> int:
         """Return the total number of frames in the loaded video."""
 
-        self._ensure_loaded()
-        assert self._capture is not None
-        frame_count = int(self._capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        capture = self._get_capture()
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         return frame_count
 
     def close(self) -> None:
@@ -95,3 +92,10 @@ class VideoReader:
 
         if self._capture is None:
             raise RuntimeError("Video is not loaded. Call load_video() first.")
+
+    def _get_capture(self) -> cv2.VideoCapture:
+        """Return the loaded capture or raise when the video is unavailable."""
+
+        self._ensure_loaded()
+        assert self._capture is not None
+        return self._capture

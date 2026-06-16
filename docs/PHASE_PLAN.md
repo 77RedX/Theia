@@ -52,9 +52,9 @@ Deliverables:
 
 Completion Criteria:
 
-- [ ] Frames extracted correctly
-- [ ] Frame count matches source
-- [ ] Tests passing
+- [x] Frames extracted correctly
+- [x] Frame count matches source
+- [x] Tests passing
 
 ---
 
@@ -76,9 +76,9 @@ Deliverables:
 
 Completion Criteria:
 
-- [ ] Output video generated
-- [ ] FPS preserved
-- [ ] Resolution preserved
+- [x] Output video generated
+- [x] FPS preserved
+- [x] Resolution preserved
 
 ---
 
