@@ -81,3 +81,6 @@ Not responsible for:
 3. Separate pipeline debugging from model debugging.
 4. Prefer maintainability over premature optimization.
 5. Every major feature must have tests.
+6. Architecture decisions are frozen once validated.
+7. Prefer future compatibility over premature abstraction.
+8. Frame pairs are the canonical processing unit.
