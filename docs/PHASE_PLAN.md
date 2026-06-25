@@ -108,9 +108,9 @@ Deliverables:
 
 Completion Criteria:
 
-- [ ] Audio extracted
-- [ ] Audio merged
-- [ ] Output video playable
+- [x] Audio extracted
+- [x] Audio merged
+- [x] Output video playable
 
 ---
 
@@ -122,14 +122,21 @@ Frame processing workflow
 
 Deliverables:
 
-- Frame pipeline
-- Frame streaming
-- Temporary storage management
+- ProcessingPipeline
+- Pair-based orchestration
+- _process_pair()
+- Pass-through processing
+- Last frame handling
+- Audio preservation integration
+- Pipeline tests
 
 Completion Criteria:
 
-- [ ] Pipeline functional
-- [ ] Handles videos correctly
+- [x] ProcessingPipeline implemented
+- [x] Pair iteration functional
+- [x] Last frame preserved
+- [x] Audio preserved
+- [x] End-to-end test passes
 
 ---
 
