@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+data/
+Theia_train.o*
+.vscode/
+.idea/
+.DS_Store
