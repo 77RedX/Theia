@@ -1,11 +1,25 @@
+# Python
 __pycache__/
 *.py[cod]
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Model checkpoints
 checkpoints/
 *.pth
 *.pt
 *.ckpt
-data/
+
+# Generated outputs
+outputs/
+training_log.csv
+
+# HPC output files
 Theia_train.o*
-.vscode/
-.idea/
-.DS_Store
+Theia_preprocess.o*
+
+# Datasets (don't commit large datasets)
+data/
