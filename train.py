@@ -6,15 +6,19 @@ from tqdm import tqdm
 import os
 import csv
 import torch.nn.functional as F
+from torchmetrics.image import StructuralSimilarityIndexMeasure
+import time
+
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("checkpoints", exist_ok=True)
+
 
 # ---------------- CONFIG ----------------
 PREPROCESSED_ROOT = "/home/akshaygautam4451/Theia/data/vimeo_triplet_256"
 TRAIN_LIST = "/home/akshaygautam4451/Theia/splits/train_list.txt"
 VAL_LIST = "/home/akshaygautam4451/Theia/splits/val_list.txt"
 BATCH_SIZE = 24 # Increased due to AMP
-EPOCHS = 10 
+EPOCHS = 10 #1 for test 
 LR = 1e-4
 NUM_WORKERS = 16
 # ----------------------------------------
@@ -41,11 +45,13 @@ train_loader, val_loader = VimeoTripletDataset.get_dataloaders(
 model = BasicFlowInterp().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 criterion = nn.L1Loss()
+ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
+
 
 # Initialize AMP Scaler
 scaler = torch.amp.GradScaler('cuda')
 
-log_file = "training_log.csv"
+log_file = "outputs/training_log.csv"
 
 with open(log_file, "w", newline="") as f:
     writer = csv.writer(f)
@@ -54,12 +60,15 @@ with open(log_file, "w", newline="") as f:
         "lr",
         "train_loss",
         "val_loss",
-        "val_psnr"
+        "val_psnr",
+        "val_ssim",
+        "epoch_time"
     ])
 
 best_val_loss = float("inf")
 
 for epoch in range(EPOCHS):
+    epoch_start = time.time()
     model.train()
     running_loss = 0.0
     current_lr = optimizer.param_groups[0]["lr"]
@@ -94,6 +103,7 @@ for epoch in range(EPOCHS):
 
     val_loss = 0.0
     val_psnr = 0.0
+    val_ssim = 0.0
 
     with torch.no_grad():
 
@@ -116,16 +126,21 @@ for epoch in range(EPOCHS):
 
             val_loss += loss.item()
             val_psnr += calculate_psnr(pred, y)
+            val_ssim += ssim_metric(pred, y).item()
 
     avg_val_loss = val_loss / len(val_loader)
     avg_val_psnr = val_psnr / len(val_loader)
+    avg_val_ssim = val_ssim / len(val_loader)
+    epoch_time = time.time() - epoch_start
 
     print(
         f"Epoch {epoch+1} | "
         f"LR {current_lr:.2e} | "
         f"Train: {avg_train_loss:.6f} | "
         f"Val: {avg_val_loss:.6f} | "
-        f"PSNR: {avg_val_psnr:.2f} dB"
+        f"PSNR: {avg_val_psnr:.2f} dB "
+        f"SSIM {avg_val_ssim:.4f} | "
+        f"Time {epoch_time:.1f}s"
     )
 
 
@@ -138,7 +153,9 @@ for epoch in range(EPOCHS):
             current_lr,
             avg_train_loss,
             avg_val_loss,
-            avg_val_psnr
+            avg_val_psnr,
+            avg_val_ssim,
+            epoch_time
         ])
 
     checkpoint = {
@@ -149,6 +166,8 @@ for epoch in range(EPOCHS):
         "train_loss": avg_train_loss,
         "val_loss": avg_val_loss,
         "val_psnr": avg_val_psnr,
+        "val_ssim": avg_val_ssim,
+        "epoch_time": epoch_time,
     }
     
     torch.save(checkpoint, f"checkpoints/checkpoint_epoch_{epoch+1}.pth")
@@ -156,5 +175,5 @@ for epoch in range(EPOCHS):
     if avg_val_loss < best_val_loss:
 
         best_val_loss = avg_val_loss
-
+        print("New Best Model saved")
         torch.save(checkpoint, "checkpoints/best_model.pth")

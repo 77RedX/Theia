@@ -21,7 +21,7 @@ def main():
     train_sequences = sequences[:split_idx]
     val_sequences = sequences[split_idx:]
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    # os.makedirs(args.output_dir, exist_ok=True)
 
     train_output = os.path.join(OUTPUT_DIR, "train_list.txt")
     val_output = os.path.join(OUTPUT_DIR, "val_list.txt")
