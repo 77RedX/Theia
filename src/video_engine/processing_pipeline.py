@@ -13,23 +13,37 @@ from .frame_extractor import FrameExtractor
 from .logger import logger
 from .video_reader import VideoReader
 from .video_writer import VideoWriter
+from .inference.base import InferenceEngine
 
 
 class ProcessingPipeline:
     """Orchestrates the end-to-end video processing flow."""
 
-    @staticmethod
-    def _process_pair(left: np.ndarray, right: np.ndarray) -> list[np.ndarray]:
-        """Process a frame pair. Phase 5 pass-through behavior.
+    def __init__(self, inference_engine: InferenceEngine | None = None) -> None:
+        """Initialize the processing pipeline.
+        
+        Args:
+            inference_engine: Optional inference engine for frame interpolation.
+                If None, the pipeline will act as a pass-through.
+        """
+        self.inference_engine = inference_engine
+
+    def _process_pair(self, left: np.ndarray, right: np.ndarray) -> list[np.ndarray]:
+        """Process a frame pair.
         
         Args:
             left: The first frame in the pair.
             right: The second frame in the pair.
             
         Returns:
-            A list containing only the left frame.
+            A list containing the left frame and, if an inference engine is present,
+            the generated middle frame.
         """
-        return [left]
+        if self.inference_engine is None:
+            return [left]
+            
+        middle = self.inference_engine.infer(left, right)
+        return [left, middle]
 
     def process_video(
         self,

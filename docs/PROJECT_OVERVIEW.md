@@ -74,6 +74,19 @@ Not responsible for:
 
 ---
 
+## Deployment Organization
+
+Deep learning models are distributed in isolated deployment packages within the `models/` directory (e.g., `models/basic/`). 
+
+Each model package must contain:
+1. `model.onnx` (The static compiled computation graph)
+2. `model_info.json` (A strict configuration contract for dimensions, color spaces, and preprocessing rules)
+3. `README.md` (Deployment-focused documentation detailing input/output specs and engine responsibilities)
+
+This layout natively supports future scaling to multiple model tiers (e.g. Plus, Pro) without modifying the core pipeline code.
+
+---
+
 ## Development Philosophy
 
 1. Build incrementally.

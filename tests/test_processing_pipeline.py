@@ -211,3 +211,77 @@ def test_progress_callback(mock_has: MagicMock, pipeline: ProcessingPipeline,
     assert len(progress_updates) > 0
     # Final progress update should be (4, 4) since dummy video has 4 frames
     assert progress_updates[-1] == (4, 4)
+
+
+from video_engine.inference.base import InferenceEngine
+
+@patch("video_engine.audio_manager.AudioManager.has_audio", return_value=False)
+def test_inference_integration_doubles_frames(mock_has: MagicMock, dummy_video: Path, tmp_path: Path) -> None:
+    """Test that integration with inference engine doubles frames correctly."""
+    output_path = tmp_path / "out_infer.mp4"
+    
+    mock_engine = MagicMock(spec=InferenceEngine)
+    # The middle frame is just a dummy gray frame
+    mock_engine.infer.return_value = np.full((240, 320, 3), 128, dtype=np.uint8)
+    
+    pipeline = ProcessingPipeline(inference_engine=mock_engine)
+    pipeline.process_video(dummy_video, output_path)
+    
+    assert output_path.exists()
+    
+    reader = VideoReader(output_path)
+    reader.load_video()
+    try:
+        # Original is 4 frames.
+        # Pairs: (F1, F2), (F2, F3), (F3, F4) => 3 pairs.
+        # Each pair outputs 2 frames [left, middle]. Total 6 frames.
+        # Pipeline appends the last frame (F4) at the end. Total 7 frames.
+        assert reader.get_frame_count() == 7
+    finally:
+        reader.close()
+    
+    assert mock_engine.infer.call_count == 3
+
+
+from video_engine.inference.onnx_engine import ONNXInferenceEngine
+
+@pytest.mark.skipif(not Path("models/basic/basic_model.onnx").exists(),
+                    reason="basic_model.onnx not found")
+@patch("video_engine.audio_manager.AudioManager.has_audio", return_value=False)
+def test_real_model_pipeline_integration(mock_has: MagicMock, dummy_video: Path, tmp_path: Path) -> None:
+    """End-to-end test using the real ONNX backend."""
+    model_path = Path("models/basic/basic_model.onnx")
+    
+    # Init and load the real engine
+    engine = ONNXInferenceEngine(model_path)
+    engine.load_model()
+    
+    # Init pipeline with real engine
+    pipeline = ProcessingPipeline(inference_engine=engine)
+    
+    output_path = tmp_path / "out_real_infer.mp4"
+    pipeline.process_video(dummy_video, output_path)
+    
+    assert output_path.exists()
+    
+    # Verify outputs
+    orig_reader = VideoReader(dummy_video)
+    orig_reader.load_video()
+    try:
+        orig_frames = orig_reader.get_frame_count()
+        orig_fps = orig_reader.get_fps()
+        orig_res = orig_reader.get_resolution()
+    finally:
+        orig_reader.close()
+        
+    out_reader = VideoReader(output_path)
+    out_reader.load_video()
+    try:
+        assert out_reader.get_fps() == orig_fps
+        assert out_reader.get_resolution() == orig_res
+        
+        # Frame count equals 2*N - 1
+        expected_frames = (2 * orig_frames) - 1
+        assert out_reader.get_frame_count() == expected_frames
+    finally:
+        out_reader.close()
