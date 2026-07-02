@@ -268,7 +268,29 @@ The following items were intentionally left out of scope:
 - Threading and Optimization
 - GUI actualization (only the callback signature was added)
 
-## Phase 6 and Beyond
+## Phase 6 - ONNX Integration (Complete)
+
+- Package layout established (`src/video_engine/inference/`).
+- Abstract `InferenceEngine` interface created and locked strictly to BGR OpenCV arrays.
+- Reusable preprocessing utilities developed (`bgr_to_rgb`, `normalize`, `hwc_to_chw`, etc.).
+- `ONNXInferenceEngine` metadata extraction and lazy loading implemented.
+- `ONNXInferenceEngine` complete execution pipeline implemented (`infer -> _preprocess_frames -> _run_inference -> _postprocess_frame`).
+- Robust test coverage applied with completely mocked `onnxruntime` boundaries.
+- **Integration**: `ProcessingPipeline` updated to accept an `InferenceEngine` via dependency injection.
+- **Integration**: `_process_pair` updated to return `[left, middle]` when inference is active, perfectly doubling the frame count (minus the final appended frame).
+- **Validation**: End-to-end inference tested successfully on `models/basic/basic_model.onnx` using `ONNXInferenceEngine` internally and driven natively by the `ProcessingPipeline`. Output FPS and resolutions are preserved seamlessly, and output frame counts correctly expand to `2*N - 1`.
+- All Phase 5 tests confirmed passing alongside new Phase 6 integration tests.
+
+- **Deployment Packaging**: Completed deployment package structure for `models/basic/` including `model_info.json` and a deployment-focused `README.md`.
+- **Deployment Packaging**: Extracted pure inference dependencies into `requirements-inference.txt` ensuring production environments remain free of heavy training libraries (e.g. `torch`).
+- **Metadata Contract**: The `model_info.json` schema is frozen, providing a clean contract defining color spaces, ranges, target resolutions, and preprocessing responsibilities.
+- **Multi-Model Convention**: The `models/` directory convention is frozen. Future models (e.g. Plus, Pro) will strictly follow the same layout (`model.onnx`, `model_info.json`, `README.md`).
+
+## Future Improvements
+
+- **Directory-Based Initialization**: `ONNXInferenceEngine` currently requires a direct path to the `.onnx` file (e.g., `ONNXInferenceEngine("models/basic/basic_model.onnx")`). In the future, this should be improved to accept a model directory (e.g., `ONNXInferenceEngine("models/basic")`), automatically locating the `.onnx` and parsing the `model_info.json` configuration. (Deferred to avoid immediate test/API churn).
+
+## Phase 7 and Beyond
 
 Add later phase entries here only after the corresponding phase is complete.
 
