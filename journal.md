@@ -82,5 +82,47 @@ This journal tracks the development of the **Theia Video Enhancer**, an AI-power
   - Ensured graceful transitions upon completion: the app navigates to the `ComparisonScreen` and correctly populates the final dashboard metrics.
   - Wrapped the entire engine invocation in a try-except block, guaranteeing that any engine failure results in a safe UI alert and log dump, rather than a hard application crash.
 
+### 9. GUI Refactor — Auto-Detection, Settings Removal & Premium UI/UX Overhaul
+**Objective**: Simplify the user flow by removing the manual Settings screen, auto-detecting video metadata on upload, and overhauling the entire UI to a premium dark theme.
+- **Action**: Rewrote all four screen files and the global stylesheet. Deleted the `SettingsScreen` dependency.
+- **Implementation**:
+  - **Removed SettingsScreen entirely**: The user no longer manually configures FPS, preset, or output format. The `SettingsScreen` class, its import in `app.py`, and all related signal connections were stripped out. Only 3 screens remain in the `QStackedWidget`: Home → Processing → Comparison.
+  - **Auto-detection on video upload**: When the user selects a video via `QFileDialog`, the `HomeScreen` now uses OpenCV (`cv2.VideoCapture`) to read the source FPS and extracts the file extension as the format. Both values are displayed in a metadata row below the filename and stored as `self.detected_fps` / `self.detected_format` for the controller to consume.
+  - **Premium global dark theme**: Replaced the basic stylesheet in `app.py` with a comprehensive design system featuring:
+    - Deep black background (`#0f0f0f`) with card surfaces (`#1a1a2e`)
+    - Purple-to-blue accent gradient (`#6c63ff` → `#3f8efc`) on the progress bar
+    - Named object styles (`#Title`, `#Subtitle`, `#SectionTitle`, `#Muted`, `#Accent`, `#CardPanel`, `#SecondaryButton`, `#DangerButton`) for consistent visual hierarchy
+    - Generous button padding (`14px 32px`) and minimum widths (`160px`) to prevent compression at any window size
+    - Custom scrollbar and terminal-style log theming
+  - **Bug fixes**:
+    - Removed the inline `setStyleSheet("background-color: white")` on the `QTextEdit` log in `processing_screen.py` that was overriding the dark theme with a jarring white background.
+    - Removed conflicting inline card styles from all screens that clashed with the global `#CardPanel` rule.
+  - **Controller updates**: `ApplicationController` now auto-derives the output format from the input file extension and populates the `ComparisonScreen` with both the original FPS and the doubled (enhanced) FPS.
+
+### 10. Critical Bug Fixes — UI Freezing, ETA Timer & Cancel Button
+**Objective**: Resolve the application becoming "Not Responding" during processing, fix the ETA timer permanently stuck on "Calculating...", and wire up the non-functional Cancel button.
+- **Root cause analysis**:
+  - **UI freezing**: `enhance_video()` was called directly on the main/GUI thread inside `ApplicationController.start_processing()`. This blocked the Qt event loop for the entire duration of processing (minutes), causing Windows to flag the window as "Not Responding". The `progress_callback` updated QLabel text, but because the event loop never ran, those updates only appeared sporadically.
+  - **Stuck ETA**: No ETA calculation logic existed anywhere in the codebase. The label was initialized to `"Calculating..."` in `ProcessingScreen.reset()` and was never updated by the controller.
+  - **Dead Cancel button**: `ProcessingScreen._on_cancel()` displayed a `QMessageBox.information("not implemented yet")` placeholder and performed no actual cancellation.
+- **Implementation**:
+  - **New `workers/worker_thread.py`**: Created a `VideoProcessingWorker(QThread)` class that runs `enhance_video()` on a background thread. The worker emits three signals: `progress_updated(int, int)`, `log_message(str)`, and `processing_finished(bool, str)`. The progress callback inside the worker checks a thread-safe `_cancelled` flag on every frame and raises `InterruptedError` to bail out cleanly.
+  - **Controller rewrite (`application_controller.py`)**: Replaced the direct `enhance_video()` call with `VideoProcessingWorker.start()`. Connected all three worker signals to handler methods. Added `_on_progress_updated()` which records `time.monotonic()` at start and computes `remaining = (elapsed / fraction_done) - elapsed`, formatted as `"2m 15s"` or `"45s"` via `_format_eta()`. Added `_on_processing_finished()` to navigate to ComparisonScreen on success, show error dialog on failure, and return home on cancellation.
+  - **Cancel wiring (`processing_screen.py`)**: Added a `cancel_requested = pyqtSignal()` to `ProcessingScreen`. Replaced the placeholder `_on_cancel()` with a `QMessageBox.question()` confirmation dialog that emits the signal on "Yes". The controller connects this signal to `_on_cancel_requested()`, which calls `worker.cancel()` and updates the status to "Cancelling...".
+
+### 11. Progress Counter Fix & Side-by-Side Video Playback
+**Objective**: Fix the progress counter exceeding 100% (showing ~200%) and replace the static thumbnail on the ComparisonScreen with actual synchronized video playback.
+- **Root cause analysis**:
+  - **Progress >100%**: In `processing_pipeline.py`, the progress callback received `processed_count` which tracked *output* frames written (including interpolated middle frames). Since the 2× interpolation engine generates 2 output frames per input pair, `processed_count` reached approximately `2 × total_input_frames`, causing the percentage to climb to ~200% against the input `total_frames`.
+  - **Static thumbnail**: The previous `ComparisonScreen` extracted a single frame from each video via OpenCV and displayed it as a `QPixmap`. No actual video playback was implemented.
+- **Implementation**:
+  - **Pipeline fix (`processing_pipeline.py`)**: Replaced `processed_count += len(processed_frames)` with a new `input_frames_done` counter that increments by 1 per pair iteration (tracking input frames consumed, not output frames written). Starts at 1 (the first "left" frame) and reaches exactly `total_frames` after all pairs are processed. The final callback explicitly reports `(total_frames, total_frames)` to guarantee 100%. Added a `min(100, ...)` safety cap in the controller.
+  - **Video playback (`comparison_screen.py`)**: Created a new `VideoPlayerWidget(QFrame)` class that uses `cv2.VideoCapture` + `QTimer` for frame-by-frame video playback:
+    - `load_video(path)` opens the video, reads FPS/frame count, and displays the first frame immediately.
+    - `advance_frame()` reads the next frame, converts BGR→RGB→`QImage`→`QPixmap`, and scales it to fit the label. Auto-loops to the beginning when the video ends.
+    - `seek_to_frame(idx)` enables restart functionality.
+  - **Playback controls**: Added ▶ Play / ⏸ Pause toggle and ⏮ Restart buttons. A `QTimer` fires at the enhanced video's native FPS to drive both players simultaneously. Playback auto-starts when the comparison screen appears via `start_playback()` called from the controller.
+  - **Navigation safety**: The `_on_navigate_home()` method pauses playback and releases video captures before navigating away, preventing resource leaks.
+
 ---
-**Status**: The core integration of the GUI and the Video Engine is complete.
+**Status**: All critical bugs resolved. The application processes videos on a background thread (no freezing), displays a live ETA countdown, supports processing cancellation, correctly tracks progress 0–100%, and plays both original and enhanced videos side-by-side on the comparison screen.
