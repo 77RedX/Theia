@@ -55,6 +55,8 @@ class ONNXInferenceEngine(InferenceEngine):
         providers = []
         if "CUDAExecutionProvider" in available_providers:
             providers.append("CUDAExecutionProvider")
+        if "DmlExecutionProvider" in available_providers:
+            providers.append("DmlExecutionProvider")
         providers.append("CPUExecutionProvider")
         
         # Create session

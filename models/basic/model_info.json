@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "backend": "onnx",
   "opset": 17,
+  "interpolation_factor": 2,
 
   "input": {
     "name": "frames",
