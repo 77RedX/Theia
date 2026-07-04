@@ -290,7 +290,37 @@ The following items were intentionally left out of scope:
 
 - **Directory-Based Initialization**: `ONNXInferenceEngine` currently requires a direct path to the `.onnx` file (e.g., `ONNXInferenceEngine("models/basic/basic_model.onnx")`). In the future, this should be improved to accept a model directory (e.g., `ONNXInferenceEngine("models/basic")`), automatically locating the `.onnx` and parsing the `model_info.json` configuration. (Deferred to avoid immediate test/API churn).
 
-## Phase 7 and Beyond
+## Phase 7A - Model Registry (Complete)
+
+- **Model Registry Architecture**: Introduced `ModelRegistry` class in `src/video_engine/model_registry.py` for dynamic model discovery.
+- **Frozen Preset Mapping**: Implemented strict mappings for `fast -> basic`, `balanced -> plus`, and `quality -> pro`.
+- **Validation**: Enforced stringent deployment validation requiring `*.onnx`, `model_info.json`, and `README.md` to exist before a preset is marked available. Gracefully handles missing directories (e.g., `plus` and `pro`).
+- **Tests Added**: Comprehensive test suite in `tests/test_model_registry.py` verifying detection logic without relying on future models existing.
+
+## Phase 7B - Configuration Layer (Complete)
+
+- **Centralized Configuration**: Introduced `TheiaConfig` dataclass in `src/video_engine/config.py` to replace scattered runtime flags.
+- **Immutability**: Config object is strictly frozen, preventing mid-execution state mutation.
+- **Validation**: Integrated preset, backend, and format validation into the config `__post_init__`.
+- **Pipeline Update**: `ProcessingPipeline` accepts the unified config object while preserving graceful degradation for backward compatibility.
+- **Tests Added**: Added `tests/test_config.py` validating initialization, freezing, and error raising. Tests verified that pipeline behavior correctly integrates the config.
+
+## Phase 7C - Public API (Complete)
+
+- **Canonical Entry Point**: Introduced `enhance_video` in `src/video_engine/api.py`. It serves as the frozen, stable public API orchestrating the config, model registry, inference initialization, and processing pipeline execution.
+- **Encapsulation**: Downstream consumers (GUI, CLI) are now fully insulated from internal class instantiations.
+- **Package Exports**: Updated `src/video_engine/__init__.py` to cleanly export `enhance_video`, `TheiaConfig`, `ProcessingPipeline`, `ModelRegistry`, and `ONNXInferenceEngine`.
+- **Tests Added**: Added `tests/test_api.py` validating that the orchestrator method accurately wires up the internal components using mock assertions to prevent heavy `ONNXRuntime` execution.
+- **Status**: The public API is frozen.
+
+## Phase 7D - FPS / Duration Investigation and Correction (Complete)
+
+- **Root Cause**: The interpolation pipeline successfully generated 2N-1 frames, but `VideoWriter` wrote them at the original input FPS, causing output playback duration to double and audio to detach halfway through.
+- **Architectural Ownership**: Decided that `ProcessingPipeline` mathematically owns playback framing because it directly manages the injection of generated frames.
+- **Fix Implementation**: Parsed the `interpolation_factor` (e.g. 2x) directly from `model_info.json` and flowed it through `ModelRegistry` into the `ModelInfo` dataclass. The public API `enhance_video` injects this `fps_multiplier` into `ProcessingPipeline`, which dynamically scales output FPS (`fps * multiplier`). This firmly links playback speed to the active deployed model rather than user configuration.
+- **Testing**: Added rigorous `output_duration ≈ input_duration` verification checks to integration tests.
+
+## Phase 8 and Beyond
 
 Add later phase entries here only after the corresponding phase is complete.
 
@@ -379,3 +409,10 @@ Last frame ownership
 Pipeline owns appending the final frame.
 
 Locked.
+## Decision 7
+
+TheiaConfig is the single source of runtime configuration.
+
+Scattered parameters (preset, keep_audio, backend, output_format) have been aggregated into an immutable, frozen TheiaConfig dataclass. The ProcessingPipeline securely relies on this central source of truth, establishing a safe boundary before we add features like threading or complex UI state.
+
+## Decision 8

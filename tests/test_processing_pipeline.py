@@ -86,6 +86,11 @@ def test_pass_through_and_last_frame(mock_merge: MagicMock, mock_extract: MagicM
         assert reader.get_frame_count() == 4  # 3 from pairs, 1 appended last frame
         assert reader.get_fps() == 30.0
         assert reader.get_resolution() == (320, 240)
+        
+        # Verify output duration matches input duration
+        input_duration = 4 / 30.0
+        output_duration = reader.get_frame_count() / reader.get_fps()
+        assert abs(input_duration - output_duration) < 0.05
     finally:
         reader.close()
 
@@ -224,7 +229,8 @@ def test_inference_integration_doubles_frames(mock_has: MagicMock, dummy_video: 
     # The middle frame is just a dummy gray frame
     mock_engine.infer.return_value = np.full((240, 320, 3), 128, dtype=np.uint8)
     
-    pipeline = ProcessingPipeline(inference_engine=mock_engine)
+    # The pipeline is instantiated with fps_multiplier=2
+    pipeline = ProcessingPipeline(inference_engine=mock_engine, fps_multiplier=2)
     pipeline.process_video(dummy_video, output_path)
     
     assert output_path.exists()
@@ -256,8 +262,8 @@ def test_real_model_pipeline_integration(mock_has: MagicMock, dummy_video: Path,
     engine = ONNXInferenceEngine(model_path)
     engine.load_model()
     
-    # Init pipeline with real engine
-    pipeline = ProcessingPipeline(inference_engine=engine)
+    # Init pipeline with real engine and a multiplier of 2
+    pipeline = ProcessingPipeline(inference_engine=engine, fps_multiplier=2)
     
     output_path = tmp_path / "out_real_infer.mp4"
     pipeline.process_video(dummy_video, output_path)
@@ -277,11 +283,17 @@ def test_real_model_pipeline_integration(mock_has: MagicMock, dummy_video: Path,
     out_reader = VideoReader(output_path)
     out_reader.load_video()
     try:
-        assert out_reader.get_fps() == orig_fps
+        # FPS should double
+        assert out_reader.get_fps() == orig_fps * 2
         assert out_reader.get_resolution() == orig_res
         
         # Frame count equals 2*N - 1
         expected_frames = (2 * orig_frames) - 1
         assert out_reader.get_frame_count() == expected_frames
+        
+        # Verify duration matches
+        input_duration = orig_frames / orig_fps
+        output_duration = out_reader.get_frame_count() / out_reader.get_fps()
+        assert abs(input_duration - output_duration) < 0.05
     finally:
         out_reader.close()

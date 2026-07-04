@@ -85,6 +85,14 @@ Each model package must contain:
 
 This layout natively supports future scaling to multiple model tiers (e.g. Plus, Pro) without modifying the core pipeline code.
 
+### Model Discovery
+New models can be easily added to the application simply by creating a new directory under `models/` (e.g. `models/<model_name>/`) containing:
+- `model.onnx`
+- `model_info.json`
+- `README.md`
+
+The newly implemented `ModelRegistry` automatically discovers and validates these deployments, making them instantly available to the `ProcessingPipeline` without requiring any internal code changes.
+
 ---
 
 ## Development Philosophy
@@ -97,3 +105,29 @@ This layout natively supports future scaling to multiple model tiers (e.g. Plus,
 6. Architecture decisions are frozen once validated.
 7. Prefer future compatibility over premature abstraction.
 8. Frame pairs are the canonical processing unit.
+
+## Architecture Decisions
+
+- **Decision 7**: TheiaConfig is the single source of runtime configuration. Scattered parameters have been aggregated into an immutable, frozen dataclass ensuring a safe boundary.
+
+---
+
+## Public API
+
+The entire video engine is exposed via a single canonical API endpoint. Downstream clients (GUI, CLI, SDK) should **only** rely on this endpoint, rather than instantiating internal pipeline components directly.
+
+Example usage:
+
+```python
+from video_engine import enhance_video, TheiaConfig
+
+config = TheiaConfig(
+    preset="fast"
+)
+
+enhance_video(
+    "input.mp4",
+    "output.mp4",
+    config,
+)
+```
