@@ -129,7 +129,9 @@ class ProcessingPipeline:
                                     resolved_progress_callback(1, 1)
                         else:
                             last_frame = None
-                            processed_count = 0
+                            # Track input frames consumed (not output frames written)
+                            # to keep progress 0–100% even when interpolation multiplies output
+                            input_frames_done = 1  # First 'left' frame is consumed on first pair read
 
                             # Iterate over frame pairs
                             for left, right in extractor.frame_pair_generator():
@@ -141,16 +143,15 @@ class ProcessingPipeline:
                                     writer.write_frame(frame)
                                     
                                 last_frame = right
-                                processed_count += len(processed_frames)
+                                input_frames_done += 1  # Each pair advances one input frame
                                 if resolved_progress_callback:
-                                    resolved_progress_callback(processed_count, total_frames)
+                                    resolved_progress_callback(input_frames_done, total_frames)
 
                             # Pipeline owns appending the final frame
                             if last_frame is not None:
                                 writer.write_frame(last_frame)
-                                processed_count += 1
                                 if resolved_progress_callback:
-                                    resolved_progress_callback(processed_count, total_frames)
+                                    resolved_progress_callback(total_frames, total_frames)
                 finally:
                     reader.close()
 

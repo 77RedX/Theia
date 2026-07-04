@@ -1,128 +1,175 @@
+"""Home Screen for the Theia Video Enhancer."""
+
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame,
-    QFileDialog, QMessageBox
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QFileDialog, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from pathlib import Path
 
+import cv2
+
+
 class HomeScreen(QWidget):
-    request_settings = pyqtSignal()
+    """Landing page where the user selects a video to enhance."""
+
     request_processing = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.input_path = None
+        self.detected_fps = None
+        self.detected_format = None
         self.init_ui()
 
     def init_ui(self):
+        """Build the Home Screen layout."""
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(40, 40, 40, 40)
-        self.main_layout.setSpacing(20)
+        self.main_layout.setContentsMargins(60, 50, 60, 30)
+        self.main_layout.setSpacing(10)
 
         self._setup_header()
+        self.main_layout.addSpacing(30)
         self._setup_main_panel()
-        
-        # Pushes footer to the bottom
         self.main_layout.addStretch()
         self._setup_footer()
 
-    def _setup_header(self):
-        self.title_label = QLabel("Theia Video Enhancer")
-        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_font = self.title_label.font()
-        title_font.setPointSize(24)
-        title_font.setBold(True)
-        self.title_label.setFont(title_font)
+    # ── Header ──────────────────────────────────────────────
 
-        self.subtitle_label = QLabel("AI Powered Video Frame Interpolation")
+    def _setup_header(self):
+        """Create the title and subtitle labels."""
+        self.title_label = QLabel("Theia Video Enhancer")
+        self.title_label.setObjectName("Title")
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.subtitle_label = QLabel("AI-Powered Video Frame Interpolation")
+        self.subtitle_label.setObjectName("Subtitle")
         self.subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_font = self.subtitle_label.font()
-        subtitle_font.setPointSize(14)
-        self.subtitle_label.setFont(subtitle_font)
 
         self.main_layout.addWidget(self.title_label)
         self.main_layout.addWidget(self.subtitle_label)
-        self.main_layout.addSpacing(30)
+
+    # ── Main Card ───────────────────────────────────────────
 
     def _setup_main_panel(self):
+        """Create the central card with video selection and info."""
         self.panel_frame = QFrame()
         self.panel_frame.setObjectName("CardPanel")
 
-
         self.panel_layout = QVBoxLayout(self.panel_frame)
-        self.panel_layout.setContentsMargins(40, 40, 40, 40)
-        self.panel_layout.setSpacing(15)
+        self.panel_layout.setContentsMargins(50, 40, 50, 40)
+        self.panel_layout.setSpacing(16)
 
-        self.lbl_selected_video_title = QLabel("Selected Video")
-        self.lbl_selected_video_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_font = self.lbl_selected_video_title.font()
-        lbl_font.setBold(True)
-        lbl_font.setPointSize(12)
-        self.lbl_selected_video_title.setFont(lbl_font)
+        # ── Video info section ──
+        self.lbl_section_title = QLabel("Selected Video")
+        self.lbl_section_title.setObjectName("SectionTitle")
+        self.lbl_section_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.lbl_selected_video_value = QLabel("No video selected")
-        self.lbl_selected_video_value.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_filename = QLabel("No video selected")
+        self.lbl_filename.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        filename_font = self.lbl_filename.font()
+        filename_font.setPointSize(13)
+        self.lbl_filename.setFont(filename_font)
 
-        self.btn_upload = QPushButton("Upload Video")
-        self.btn_upload.clicked.connect(self.select_video)
-        self.btn_settings = QPushButton("Settings")
-        self.btn_settings.clicked.connect(self.request_settings.emit)
+        # ── Detected metadata row ──
+        self.metadata_layout = QHBoxLayout()
+        self.metadata_layout.setSpacing(40)
+
+        self.lbl_fps_info = QLabel("FPS:  —")
+        self.lbl_fps_info.setObjectName("Muted")
+        self.lbl_fps_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.lbl_format_info = QLabel("Format:  —")
+        self.lbl_format_info.setObjectName("Muted")
+        self.lbl_format_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.metadata_layout.addStretch()
+        self.metadata_layout.addWidget(self.lbl_fps_info)
+        self.metadata_layout.addWidget(self.lbl_format_info)
+        self.metadata_layout.addStretch()
+
+        # ── Buttons ──
+        self.btn_select = QPushButton("Select Video")
+        self.btn_select.clicked.connect(self.select_video)
+
         self.btn_process = QPushButton("Start Processing")
         self.btn_process.clicked.connect(self._on_start_processing)
 
-        # Center the buttons horizontally
-        self.button_layout = QHBoxLayout()
-        self.button_layout.addStretch()
-        
-        self.v_button_layout = QVBoxLayout()
-        self.v_button_layout.setSpacing(10)
-        self.v_button_layout.addWidget(self.btn_upload)
-        self.v_button_layout.addWidget(self.btn_settings)
-        self.v_button_layout.addWidget(self.btn_process)
-        
-        self.button_layout.addLayout(self.v_button_layout)
-        self.button_layout.addStretch()
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(20)
+        button_layout.addStretch()
+        button_layout.addWidget(self.btn_select)
+        button_layout.addWidget(self.btn_process)
+        button_layout.addStretch()
 
-        self.panel_layout.addWidget(self.lbl_selected_video_title)
-        self.panel_layout.addWidget(self.lbl_selected_video_value)
-        self.panel_layout.addSpacing(20)
-        self.panel_layout.addLayout(self.button_layout)
+        # ── Assemble card ──
+        self.panel_layout.addWidget(self.lbl_section_title)
+        self.panel_layout.addWidget(self.lbl_filename)
+        self.panel_layout.addLayout(self.metadata_layout)
+        self.panel_layout.addSpacing(10)
+        self.panel_layout.addLayout(button_layout)
 
-        # Center the panel in the main layout
-        self.panel_container_layout = QHBoxLayout()
-        self.panel_container_layout.addStretch()
-        self.panel_container_layout.addWidget(self.panel_frame)
-        self.panel_container_layout.addStretch()
+        # Center the card horizontally with stretch
+        container = QHBoxLayout()
+        container.addStretch(1)
+        container.addWidget(self.panel_frame, stretch=4)
+        container.addStretch(1)
 
-        self.main_layout.addLayout(self.panel_container_layout)
+        self.main_layout.addLayout(container)
+
+    # ── Footer ──────────────────────────────────────────────
 
     def _setup_footer(self):
-        self.footer_label = QLabel("Runs locally using AI frame interpolation.")
+        """Create the footer text."""
+        self.footer_label = QLabel("Runs locally · No data leaves your machine")
+        self.footer_label.setObjectName("Muted")
         self.footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        footer_font = self.footer_label.font()
-        footer_font.setPointSize(10)
-        self.footer_label.setFont(footer_font)
-
         self.main_layout.addWidget(self.footer_label)
 
+    # ── Actions ─────────────────────────────────────────────
+
     def select_video(self):
-        """Open a file dialog to select a video and update the UI label."""
+        """Open a file dialog, detect FPS and format, and update the UI."""
         file_filter = "Video Files (*.mp4 *.mkv *.avi *.mov)"
         file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Video",
-            "",
-            file_filter
+            self, "Select Video", "", file_filter
         )
-        
-        if file_path:
-            self.input_path = file_path
-            filename = Path(file_path).name
-            self.lbl_selected_video_value.setText(filename)
+
+        if not file_path:
+            return
+
+        self.input_path = file_path
+        path = Path(file_path)
+
+        # Update filename
+        self.lbl_filename.setText(path.name)
+
+        # Detect format from extension
+        self.detected_format = path.suffix.lstrip(".").lower()
+        self.lbl_format_info.setText(f"Format:  {self.detected_format.upper()}")
+
+        # Detect FPS using OpenCV
+        try:
+            cap = cv2.VideoCapture(file_path)
+            if cap.isOpened():
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                self.detected_fps = round(fps, 2)
+                self.lbl_fps_info.setText(f"FPS:  {self.detected_fps}")
+            else:
+                self.detected_fps = None
+                self.lbl_fps_info.setText("FPS:  Unknown")
+            cap.release()
+        except Exception:
+            self.detected_fps = None
+            self.lbl_fps_info.setText("FPS:  Unknown")
 
     def _on_start_processing(self):
-        """Handle the Start Processing button click."""
+        """Validate selection and emit the processing signal."""
         if not self.input_path:
-            QMessageBox.warning(self, "Warning", "Please select a video before continuing.")
+            QMessageBox.warning(
+                self, "No Video Selected",
+                "Please select a video file before starting."
+            )
             return
-        
+
         self.request_processing.emit()
