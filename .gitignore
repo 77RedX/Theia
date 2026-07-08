@@ -9,9 +9,6 @@ __pycache__/
 
 # Model checkpoints
 checkpoints/
-*.pth
-*.pt
-*.ckpt
 
 # Generated outputs
 outputs/
