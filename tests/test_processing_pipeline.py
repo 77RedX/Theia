@@ -249,6 +249,57 @@ def test_inference_integration_doubles_frames(mock_has: MagicMock, dummy_video: 
     assert mock_engine.infer.call_count == 3
 
 
+from video_engine.scene_detection import SceneDetector
+
+@patch("video_engine.audio_manager.AudioManager.has_audio", return_value=False)
+def test_scene_cut_skips_inference(mock_has: MagicMock, dummy_video: Path, tmp_path: Path) -> None:
+    """Test that a detected scene cut skips inference and avoids interpolation."""
+    output_path = tmp_path / "out_scene_cut.mp4"
+    
+    mock_engine = MagicMock(spec=InferenceEngine)
+    mock_engine.infer.return_value = np.full((240, 320, 3), 128, dtype=np.uint8)
+    
+    # Create a SceneDetector mock that detects a cut on the 2nd pair (between red and green)
+    mock_scene_detector = MagicMock(spec=SceneDetector)
+    # The dummy video has frames: black, red, green, blue.
+    # Pairs are:
+    # 1. black -> red
+    # 2. red -> green
+    # 3. green -> blue
+    # We will mock it so that the 2nd pair (red -> green) triggers a scene cut.
+    mock_scene_detector.is_scene_cut.side_effect = [False, True, False]
+    
+    pipeline = ProcessingPipeline(
+        inference_engine=mock_engine, 
+        fps_multiplier=2,
+        scene_detector=mock_scene_detector
+    )
+    
+    pipeline.process_video(dummy_video, output_path)
+    
+    assert output_path.exists()
+    
+    reader = VideoReader(output_path)
+    reader.load_video()
+    try:
+        # Original is 4 frames.
+        # Pairs:
+        # 1. False -> outputs 2 frames [left, middle]
+        # 2. True -> outputs 1 frame [left]
+        # 3. False -> outputs 2 frames [left, middle]
+        # Last frame (blue) is appended: 1 frame
+        # Total frames expected: 2 + 1 + 2 + 1 = 6 frames
+        assert reader.get_frame_count() == 6
+    finally:
+        reader.close()
+    
+    # Inference should only have been called twice (for pairs 1 and 3)
+    assert mock_engine.infer.call_count == 2
+    
+    # is_scene_cut should have been called 3 times (once per pair)
+    assert mock_scene_detector.is_scene_cut.call_count == 3
+
+
 from video_engine.inference.onnx_engine import ONNXInferenceEngine
 
 @pytest.mark.skipif(not Path("models/basic/basic_model.onnx").exists(),
@@ -297,3 +348,95 @@ def test_real_model_pipeline_integration(mock_has: MagicMock, dummy_video: Path,
         assert abs(input_duration - output_duration) < 0.05
     finally:
         out_reader.close()
+
+
+from video_engine.overlay_restoration import OverlayRestoration
+from video_engine.config import TheiaConfig
+
+@patch("video_engine.audio_manager.AudioManager.has_audio", return_value=False)
+def test_overlay_restoration_called(mock_has: MagicMock, dummy_video: Path, tmp_path: Path) -> None:
+    """Test that overlay restoration is correctly invoked when enabled."""
+    output_path = tmp_path / "out_overlay.mp4"
+    
+    mock_engine = MagicMock(spec=InferenceEngine)
+    mock_engine.infer.return_value = np.full((240, 320, 3), 128, dtype=np.uint8)
+    
+    mock_overlay = MagicMock(spec=OverlayRestoration)
+    mock_overlay.generate_mask.return_value = np.zeros((240, 320), dtype=np.uint8)
+    mock_overlay.restore_overlay.return_value = np.full((240, 320, 3), 128, dtype=np.uint8)
+    
+    config = TheiaConfig(protect_static_overlays=True, detect_scene_cuts=False)
+    
+    pipeline = ProcessingPipeline(
+        inference_engine=mock_engine,
+        config=config,
+        fps_multiplier=2,
+        overlay_restoration=mock_overlay
+    )
+    
+    pipeline.process_video(dummy_video, output_path)
+    
+    assert output_path.exists()
+    
+    # 3 frame pairs, so it should be called 3 times
+    assert mock_overlay.generate_mask.call_count == 3
+    assert mock_overlay.restore_overlay.call_count == 3
+
+
+@patch("video_engine.audio_manager.AudioManager.has_audio", return_value=False)
+def test_overlay_restoration_disabled_bypasses(mock_has: MagicMock, dummy_video: Path, tmp_path: Path) -> None:
+    """Test that disabled configuration bypasses overlay restoration entirely."""
+    output_path = tmp_path / "out_overlay_disabled.mp4"
+    
+    mock_engine = MagicMock(spec=InferenceEngine)
+    mock_engine.infer.return_value = np.full((240, 320, 3), 128, dtype=np.uint8)
+    
+    mock_overlay = MagicMock(spec=OverlayRestoration)
+    
+    config = TheiaConfig(protect_static_overlays=False)
+    
+    pipeline = ProcessingPipeline(
+        inference_engine=mock_engine,
+        config=config,
+        fps_multiplier=2,
+        overlay_restoration=mock_overlay
+    )
+    
+    pipeline.process_video(dummy_video, output_path)
+    
+    assert mock_overlay.generate_mask.call_count == 0
+    assert mock_overlay.restore_overlay.call_count == 0
+
+
+@patch("video_engine.audio_manager.AudioManager.has_audio", return_value=False)
+def test_scene_cuts_bypass_overlay_restoration(mock_has: MagicMock, dummy_video: Path, tmp_path: Path) -> None:
+    """Test that scene cuts skip inference and overlay generation."""
+    output_path = tmp_path / "out_overlay_scene_cut.mp4"
+    
+    mock_engine = MagicMock(spec=InferenceEngine)
+    mock_engine.infer.return_value = np.full((240, 320, 3), 128, dtype=np.uint8)
+    
+    mock_scene_detector = MagicMock(spec=SceneDetector)
+    # Detect a cut on every single frame pair
+    mock_scene_detector.is_scene_cut.return_value = True
+    
+    mock_overlay = MagicMock(spec=OverlayRestoration)
+    
+    config = TheiaConfig(protect_static_overlays=True, detect_scene_cuts=True)
+    
+    pipeline = ProcessingPipeline(
+        inference_engine=mock_engine,
+        config=config,
+        fps_multiplier=2,
+        scene_detector=mock_scene_detector,
+        overlay_restoration=mock_overlay
+    )
+    
+    pipeline.process_video(dummy_video, output_path)
+    
+    # Inference should never be called
+    assert mock_engine.infer.call_count == 0
+    # Overlay should never be generated since inference was skipped
+    assert mock_overlay.generate_mask.call_count == 0
+    assert mock_overlay.restore_overlay.call_count == 0
+

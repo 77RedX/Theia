@@ -59,9 +59,11 @@ Responsible for:
 * Video loading
 * Metadata extraction
 * Frame extraction
+* Scene detection (infrastructure)
 * Frame processing pipeline
 * Model inference integration
-* Video reconstruction
+* Overlay Restoration
+* Debug & Diagnostics Framework
 * Audio handling
 * Export pipeline
 
