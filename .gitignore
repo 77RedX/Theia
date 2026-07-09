@@ -41,3 +41,7 @@ wandb/
 logs/
 *.pth
 *.onnx
+
+dataset.py
+models/
+weights/
