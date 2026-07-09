@@ -1,8 +1,8 @@
 Evaluation Report
 =================
-Checkpoint : C:\Users\anika\OneDrive\Desktop\mYTheia\basic_flow.pth
-Dataset    : C:\Users\anika\OneDrive\Desktop\mYTheia\vimeo_resized
-Test List  : C:\Users\anika\OneDrive\Desktop\mYTheia\splits\test_list.txt
+Checkpoint : basic_flow.pth
+Dataset    : vimeo_resized
+Test List  : test_list.txt
 
 Average PSNR : 30.0334 dB
 Average SSIM : 0.881050
