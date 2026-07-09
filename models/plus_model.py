@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
-from modules.feature import FeaturePyramid
-from modules.flow import MultiScaleFlow
-from modules.warp import Warper
-from modules.refinement import RefineUNet
+from .modules.feature import FeaturePyramid
+from .modules.flow import MultiScaleFlow
+from .modules.warp import Warper
+from .modules.refinement import RefineUNet
 
 class PlusModel(nn.Module):
     """
