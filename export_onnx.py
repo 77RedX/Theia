@@ -4,8 +4,8 @@ import torch
 from models.basic_flow import BasicFlowInterp
 
 # ---------------- CONFIG ----------------
-CHECKPOINT = "checkpoints/best_model.pth"
-OUTPUT_DIR = "weights"
+CHECKPOINT = "/home/akshaygautam4451/Theia/checkpoints/best_model.pth"
+OUTPUT_DIR = "/home/akshaygautam4451/Theia/weights"
 OUTPUT_FILE = "basic_model.onnx"
 
 HEIGHT = 256

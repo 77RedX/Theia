@@ -1,24 +1,26 @@
 import torch
 import torch.nn as nn
-from dataset import VimeoTripletDataset
-from models.basic_flow import BasicFlowInterp
+import torch.nn.functional as F
+from torchmetrics.image import StructuralSimilarityIndexMeasure
 from tqdm import tqdm
 import os
 import csv
-import torch.nn.functional as F
-from torchmetrics.image import StructuralSimilarityIndexMeasure
 import time
+
+from dataset import VimeoTripletDataset
+from models.plus_model import PlusModel
+from models.modules.warp import Warper
+from utils.loss import VFILoss
 
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("checkpoints", exist_ok=True)
-
 
 # ---------------- CONFIG ----------------
 PREPROCESSED_ROOT = "/home/akshaygautam4451/Theia/data/vimeo_triplet_256"
 TRAIN_LIST = "/home/akshaygautam4451/Theia/splits/train_list.txt"
 VAL_LIST = "/home/akshaygautam4451/Theia/splits/val_list.txt"
-BATCH_SIZE = 24 # Increased due to AMP
-EPOCHS = 10 #1 for test 
+BATCH_SIZE = 24  # Should fit comfortably on the L40's 48GB VRAM
+EPOCHS = 10
 LR = 1e-4
 NUM_WORKERS = 16
 # ----------------------------------------
@@ -42,17 +44,20 @@ train_loader, val_loader = VimeoTripletDataset.get_dataloaders(
     num_workers=NUM_WORKERS
 )
 
-model = BasicFlowInterp().to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=LR)
-criterion = nn.L1Loss()
-ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
+# Initialize PlusModel, Multi-Scale Loss, and Warper (for loss calculation)
+model = PlusModel().to(device)
+criterion = VFILoss().to(device)
+warper = Warper().to(device)
 
+optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
 
 # Initialize AMP Scaler
 scaler = torch.amp.GradScaler('cuda')
 
 log_file = "outputs/training_log.csv"
 
+# Initialize CSV Headers
 with open(log_file, "w", newline="") as f:
     writer = csv.writer(f)
     writer.writerow([
@@ -69,25 +74,29 @@ best_val_loss = float("inf")
 
 for epoch in range(EPOCHS):
     epoch_start = time.time()
+    
+    # --- TRAINING LOOP ---
     model.train()
     running_loss = 0.0
     current_lr = optimizer.param_groups[0]["lr"]
 
-    pbar = tqdm(
-        train_loader,
-        desc=f"Epoch {epoch+1}/{EPOCHS} [Train]"
-    )
+    pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS} [Train]")
+    
     for x, y in pbar:
         x = x.to(device, non_blocking=True)
         y = y.to(device, non_blocking=True)
+        
+        # Split 6-channel input into separate frames
+        img1 = x[:, :3, :, :]
+        img3 = x[:, 3:, :, :]
 
-        optimizer.zero_grad(set_to_none = True)
+        optimizer.zero_grad(set_to_none=True)
         
         # Mixed precision forward pass
         with torch.amp.autocast(device_type=device, enabled=(device == "cuda")):
-            result = model(x)
-            pred = result["pred"]
-            loss = criterion(pred, y)
+            # training=True returns the dictionary for VFILoss
+            result = model(img1, img3, training=True) 
+            loss = criterion(result, y, img1, img3, warper)
 
         # Scaled backward pass
         scaler.scale(loss).backward()
@@ -99,30 +108,27 @@ for epoch in range(EPOCHS):
 
     avg_train_loss = running_loss / len(train_loader)
 
+    # --- VALIDATION LOOP ---
     model.eval()
-
     val_loss = 0.0
     val_psnr = 0.0
     val_ssim = 0.0
 
     with torch.no_grad():
-
-        pbar = tqdm(
-            val_loader,
-            desc=f"Epoch {epoch+1}/{EPOCHS} [Val]"
-        )
+        pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{EPOCHS} [Val]")
 
         for x, y in pbar:
-
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
+            
+            img1 = x[:, :3, :, :]
+            img3 = x[:, 3:, :, :]
 
-            with torch.amp.autocast('cuda'):
-
-                result = model(x)
+            with torch.amp.autocast(device_type=device, enabled=(device == "cuda")):
+                # Keep training=True here strictly to calculate the multi-scale validation loss
+                result = model(img1, img3, training=True)
                 pred = result["pred"]
-
-                loss = criterion(pred, y)
+                loss = criterion(result, y, img1, img3, warper)
 
             val_loss += loss.item()
             val_psnr += calculate_psnr(pred, y)
@@ -138,16 +144,13 @@ for epoch in range(EPOCHS):
         f"LR {current_lr:.2e} | "
         f"Train: {avg_train_loss:.6f} | "
         f"Val: {avg_val_loss:.6f} | "
-        f"PSNR: {avg_val_psnr:.2f} dB "
+        f"PSNR: {avg_val_psnr:.2f} dB | "
         f"SSIM {avg_val_ssim:.4f} | "
         f"Time {epoch_time:.1f}s"
     )
 
-
     with open(log_file, "a", newline="") as f:
-
         writer = csv.writer(f)
-
         writer.writerow([
             epoch + 1,
             current_lr,
@@ -170,10 +173,10 @@ for epoch in range(EPOCHS):
         "epoch_time": epoch_time,
     }
     
-    torch.save(checkpoint, f"checkpoints/checkpoint_epoch_{epoch+1}.pth")
+    # Save standard checkpoint
+    torch.save(checkpoint, f"checkpoints/plus_checkpoint_epoch_{epoch+1}.pth")
 
     if avg_val_loss < best_val_loss:
-
         best_val_loss = avg_val_loss
         print("New Best Model saved")
-        torch.save(checkpoint, "checkpoints/best_model.pth")
+        torch.save(checkpoint, "checkpoints/best_plus_model.pth")

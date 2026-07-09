@@ -10,7 +10,7 @@ from models.basic_flow import BasicFlowInterp
 PREPROCESSED_ROOT = "/home/akshaygautam4451/Theia/data/vimeo_triplet_256"
 VAL_LIST = "/home/akshaygautam4451/Theia/splits/val_list.txt"
 # Pointing to the new best model checkpoint you created in train.py
-CHECKPOINT = "checkpoints/best_model.pth" 
+CHECKPOINT = "/home/akshaygautam4451/Theia/checkpoints/best_model.pth" 
 
 NUM_SAMPLES = 5
 OUT_DIR = f"/tmp/{os.environ['USER']}/theia_visuals"
