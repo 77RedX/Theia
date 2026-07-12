@@ -1,7 +1,7 @@
 #!/bin/bash
 #PBS -N Theia_train
 #PBS -q gpu
-#PBS -l select=1:ncpus=16:ngpus=1:mem=64gb
+#PBS -l select=1:ncpus=8:ngpus=1:mem=64gb
 #PBS -j oe
 
 # Go to the directory from which the job was submitted

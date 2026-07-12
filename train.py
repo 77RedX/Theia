@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchmetrics.image import StructuralSimilarityIndexMeasure
+from torch.optim.lr_scheduler import MultiStepLR
 from tqdm import tqdm
 import os
 import csv
@@ -19,10 +20,11 @@ os.makedirs("checkpoints", exist_ok=True)
 PREPROCESSED_ROOT = "/home/akshaygautam4451/Theia/data/vimeo_triplet_256"
 TRAIN_LIST = "/home/akshaygautam4451/Theia/splits/train_list.txt"
 VAL_LIST = "/home/akshaygautam4451/Theia/splits/val_list.txt"
-BATCH_SIZE = 24  # Should fit comfortably on the L40's 48GB VRAM
-EPOCHS = 10
+BATCH_SIZE = 12  # Should fit comfortably on the L40's 48GB VRAM
+EPOCHS = 30 
 LR = 1e-4
-NUM_WORKERS = 16
+NUM_WORKERS = 8
+RESUME_CHECKPOINT = "/home/akshaygautam4451/Theia/checkpoints/best_plus_model.pth"
 # ----------------------------------------
 
 def calculate_psnr(pred, target):
@@ -51,35 +53,54 @@ warper = Warper().to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
-
+scheduler = MultiStepLR(optimizer, milestones=[20, 27], gamma=0.5)
 # Initialize AMP Scaler
 scaler = torch.amp.GradScaler('cuda')
 
 log_file = "outputs/training_log.csv"
-
-# Initialize CSV Headers
-with open(log_file, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow([
-        "epoch",
-        "lr",
-        "train_loss",
-        "val_loss",
-        "val_psnr",
-        "val_ssim",
-        "epoch_time"
-    ])
-
+start_epoch = 0
 best_val_loss = float("inf")
 
-for epoch in range(EPOCHS):
+# --- RESUME LOGIC ---
+if RESUME_CHECKPOINT and os.path.exists(RESUME_CHECKPOINT):
+    print(f"Resuming from checkpoint: {RESUME_CHECKPOINT}")
+    checkpoint = torch.load(RESUME_CHECKPOINT, map_location=device, weights_only=False)
+    
+    model.load_state_dict(checkpoint["model"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    scaler.load_state_dict(checkpoint["scaler"])
+    
+    # checkpoint["epoch"] is 0-indexed. If it saved epoch 9 (which is epoch 10), start_epoch becomes 10.
+    start_epoch = checkpoint["epoch"] + 1 
+    best_val_loss = checkpoint.get("val_loss", float("inf"))
+    if "scheduler" in checkpoint:
+        scheduler.load_state_dict(checkpoint["scheduler"])
+    else:
+        print("No scheduler state found. Fast-forwarding to current epoch...")
+        for _ in range(start_epoch):
+            scheduler.step()
+            
+    print(f"Successfully restored state. Resuming at Epoch {start_epoch + 1}")
+
+else:
+    # Only write the CSV header if we are starting completely fresh
+    print("Starting training from scratch.")
+    with open(log_file, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "epoch", "lr", "train_loss", "val_loss", 
+            "val_psnr", "val_ssim", "epoch_time"
+        ])
+
+# --- TRAINING LOOP ---
+for epoch in range(start_epoch, EPOCHS):
     epoch_start = time.time()
     
-    # --- TRAINING LOOP ---
     model.train()
     running_loss = 0.0
     current_lr = optimizer.param_groups[0]["lr"]
-
+    
+    # Update pbar desc to use EPOCHS
     pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS} [Train]")
     
     for x, y in pbar:
@@ -138,6 +159,7 @@ for epoch in range(EPOCHS):
     avg_val_psnr = val_psnr / len(val_loader)
     avg_val_ssim = val_ssim / len(val_loader)
     epoch_time = time.time() - epoch_start
+    scheduler.step()
 
     print(
         f"Epoch {epoch+1} | "
@@ -166,6 +188,7 @@ for epoch in range(EPOCHS):
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "scaler": scaler.state_dict(),
+        "scheduler": scheduler.state_dict(),
         "train_loss": avg_train_loss,
         "val_loss": avg_val_loss,
         "val_psnr": avg_val_psnr,
