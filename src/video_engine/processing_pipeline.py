@@ -15,6 +15,9 @@ from .video_reader import VideoReader
 from .video_writer import VideoWriter
 from .inference.base import InferenceEngine
 from .config import TheiaConfig
+from .scene_detection import SceneDetector
+from .overlay_restoration import OverlayRestoration
+from .debug import DebugCollector
 
 
 class ProcessingPipeline:
@@ -25,6 +28,9 @@ class ProcessingPipeline:
         inference_engine: InferenceEngine | None = None,
         config: TheiaConfig | None = None,
         fps_multiplier: int = 1,
+        scene_detector: SceneDetector | None = None,
+        overlay_restoration: OverlayRestoration | None = None,
+        debug_collector: DebugCollector | None = None,
     ) -> None:
         """Initialize the processing pipeline.
         
@@ -37,22 +43,82 @@ class ProcessingPipeline:
         self.inference_engine = inference_engine
         self.config = config or TheiaConfig()
         self.fps_multiplier = fps_multiplier
+        self.scene_detector = scene_detector
+        self.overlay_restoration = overlay_restoration
+        self.debug_collector = debug_collector
 
-    def _process_pair(self, left: np.ndarray, right: np.ndarray) -> list[np.ndarray]:
+    def _process_pair(self, left: np.ndarray, right: np.ndarray, pair_idx: int) -> list[np.ndarray]:
         """Process a frame pair.
         
         Args:
             left: The first frame in the pair.
             right: The second frame in the pair.
+            pair_idx: The current frame pair index.
             
         Returns:
             A list containing the left frame and, if an inference engine is present,
             the generated middle frame.
         """
-        if self.inference_engine is None:
-            return [left]
+        is_cut = False
+        scene_score = 0.0
+        
+        if self.scene_detector is not None and self.config.detect_scene_cuts:
+            if self.config.debug_mode and self.debug_collector is not None:
+                scene_score = self.scene_detector.compute_difference(left, right)
             
-        middle = self.inference_engine.infer(left, right)
+            if self.scene_detector.is_scene_cut(left, right):
+                logger.info("Scene cut detected, skipping inference")
+                is_cut = True
+
+        mask = None
+        middle = None
+        restored = None
+        
+        if not is_cut:
+            if self.inference_engine is None:
+                return [left]
+                
+            # Optional: Generate overlay mask before inference
+            if self.overlay_restoration is not None and self.config.protect_static_overlays:
+                mask = self.overlay_restoration.generate_mask(left, right)
+                
+            middle = self.inference_engine.infer(left, right)
+            
+            # Optional: Restore overlay pixels on the generated frame
+            if self.overlay_restoration is not None and mask is not None:
+                restored = self.overlay_restoration.restore_overlay(left, middle, mask)
+                middle = restored
+
+        # Diagnostic Export (zero-overhead if disabled)
+        if self.config.debug_mode and self.debug_collector is not None:
+            self.debug_collector.save_frame("left", left, pair_idx)
+            self.debug_collector.save_frame("right", right, pair_idx)
+            
+            if self.scene_detector is not None:
+                self.debug_collector.save_scene_score(scene_score, pair_idx)
+                
+            if mask is not None:
+                self.debug_collector.save_mask("overlay_mask", mask, pair_idx)
+                
+            if middle is not None:
+                self.debug_collector.save_frame("generated", middle, pair_idx)
+                
+            if restored is not None:
+                self.debug_collector.save_frame("restored", restored, pair_idx)
+                
+            metadata = {
+                "pair_index": pair_idx,
+                "scene_detected": is_cut,
+                "scene_score": scene_score,
+                "overlay_enabled": self.config.protect_static_overlays,
+                "model_preset": self.config.preset,
+                "original_resolution": [int(left.shape[1]), int(left.shape[0])]
+            }
+            self.debug_collector.save_metadata(metadata, pair_idx)
+
+        if is_cut or self.inference_engine is None:
+            return [left]
+
         return [left, middle]
 
     def process_video(
@@ -136,7 +202,7 @@ class ProcessingPipeline:
                             # Iterate over frame pairs
                             for left, right in extractor.frame_pair_generator():
                                 # Process the pair
-                                processed_frames = self._process_pair(left, right)
+                                processed_frames = self._process_pair(left, right, input_frames_done)
                                 
                                 # Write returned frames
                                 for frame in processed_frames:

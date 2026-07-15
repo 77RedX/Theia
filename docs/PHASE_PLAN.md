@@ -176,17 +176,22 @@ Completion Criteria:
 
 ---
 
-## Phase 8 — Optimization
+## Phase 8 — Advanced Inference Capabilities
 
 Deliverables:
 
+- Scene Detection Infrastructure
+- Dynamic Inference Routing
 - Streaming architecture
 - Reduced memory usage
-- Performance improvements
 
 Completion Criteria:
 
-- [ ] Long videos supported
+- [x] Phase 8A - Scene Detection Component added
+- [x] Phase 8B - Scene Detection Integration completed
+- [x] Phase 8C - Overlay Restoration Infrastructure added
+- [x] Phase 8D - Overlay Restoration Integration completed
+- [x] Phase 8E - Debug & Diagnostics Framework added
 - [ ] Stable memory usage
 
 ---

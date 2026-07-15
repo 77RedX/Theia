@@ -320,9 +320,35 @@ The following items were intentionally left out of scope:
 - **Fix Implementation**: Parsed the `interpolation_factor` (e.g. 2x) directly from `model_info.json` and flowed it through `ModelRegistry` into the `ModelInfo` dataclass. The public API `enhance_video` injects this `fps_multiplier` into `ProcessingPipeline`, which dynamically scales output FPS (`fps * multiplier`). This firmly links playback speed to the active deployed model rather than user configuration.
 - **Testing**: Added rigorous `output_duration ≈ input_duration` verification checks to integration tests.
 
-## Phase 8 and Beyond
+## Phase 8A - Scene Detection Infrastructure (Complete)
 
-Add later phase entries here only after the corresponding phase is complete.
+- **Goal**: Introduce a reusable `SceneDetector` component to calculate deterministic pixel differences between frame pairs, paving the way for logic that prevents interpolating across hard cuts.
+- **What Was Done**: Implemented `SceneDetector` in `src/video_engine/scene_detection.py` to evaluate BGR frames using grayscale conversion and mean absolute difference. Extended `TheiaConfig` with `detect_scene_cuts` and `scene_cut_threshold`.
+- **Why**: By building the infrastructure strictly in isolation and adding configuration parameters now, we adhere to the project's phased approach, proving the mathematics and tests before wiring them into the complex `ProcessingPipeline`. This keeps the detection logic lightweight and completely separate from AI inference models.
+- **Validation**: Added exhaustive unit tests validating behavior across identical, slightly different, and entirely disparate frames.
+- **Constraints Maintained**: No runtime integration was introduced; `ProcessingPipeline` and `InferenceEngine` remain untouched.
+
+## Phase 8B - Scene Detection Integration (Complete)
+
+- **Goal**: Integrate the `SceneDetector` directly into the `ProcessingPipeline` to actively prevent frame interpolation across hard scene cuts.
+- **What Was Done**: Updated `ProcessingPipeline` constructor to accept an optional `scene_detector`. Integrated `is_scene_cut` evaluation inside `_process_pair()`, causing it to gracefully return only the original frame `[left]` when a cut is detected (skipping inference entirely). Finally, wired `SceneDetector` instantiation into the public `enhance_video` API using the preset `scene_cut_threshold`.
+- **Why**: This implements the actual runtime logic of scene detection while adhering strongly to Dependency Injection principles. `ProcessingPipeline` stays ignorant of *how* cuts are detected, only respecting the boolean response. This prevents awful visual morphing glitches that occur when deep learning models try to interpolate two completely unrelated shots.
+- **Validation**: Introduced tests checking for inference skips on mocked scene cuts. Confirmed during a manual `run_theia.py` run on the real sample video that "Scene cut detected, skipping inference" fires correctly on hard shot transitions.
+
+## Phase 8C - Overlay Restoration Infrastructure (Complete)
+
+- **Goal**: Introduce a reusable overlay restoration module that detects persistent static overlays (subtitles, logos, watermarks) independently of the AI models.
+- **What Was Done**: Created `src/video_engine/overlay_restoration.py` implementing `OverlayRestoration`. It contains `generate_mask()` for detecting bright, static edges via OpenCV morphology and `adaptiveThreshold` filtering, and `restore_overlay()` for burning the masked pixels back into the generated frame. Added `protect_static_overlays` to `TheiaConfig`.
+- **Why**: AI interpolation models inherently distort static overlays when attempting to guess motion vectors where none exist. Isolating this as a classical OpenCV pass keeps the DL inference logic pure.
+- **Constraints Maintained**: This is purely a reusable infrastructure phase. No runtime logic was changed. `ProcessingPipeline` was not touched.
+
+## Phase 8D - Overlay Restoration Integration (Complete)
+
+- **Goal**: Integrate the reusable `OverlayRestoration` component into the `ProcessingPipeline` while preserving the dependency-injection architecture and keeping all responsibilities cleanly separated.
+- **What Was Done**: Updated `ProcessingPipeline` to optionally accept `overlay_restoration`. Within `_process_pair()`, right before calling `infer()`, if `protect_static_overlays` is True, it generates a mask using the left and right frames. After inference completes, it calls `restore_overlay()` to cleanly overwrite the morphed overlay pixels with the pristine original pixels. Wired this gracefully into `api.py`.
+- **Validation**: Added tests simulating enabled/disabled workflows and scene-cut overrides. All 100 tests pass.
+
+## Phase 8 and Beyond
 
 # Architecture Decisions (Frozen)
 

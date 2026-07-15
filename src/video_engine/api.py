@@ -6,6 +6,9 @@ from .config import TheiaConfig
 from .inference.onnx_engine import ONNXInferenceEngine
 from .model_registry import ModelRegistry
 from .processing_pipeline import ProcessingPipeline
+from .scene_detection import SceneDetector
+from .overlay_restoration import OverlayRestoration
+from .debug import DebugCollector
 
 
 def enhance_video(
@@ -34,10 +37,21 @@ def enhance_video(
     engine = ONNXInferenceEngine(model_info.onnx_path)
     engine.load_model()
 
-    # 3. Instantiate and run the processing pipeline
+    # 3. Instantiate optional components
+    scene_detector = SceneDetector(threshold=config.scene_cut_threshold)
+    overlay_restoration = OverlayRestoration()
+    
+    debug_collector = None
+    if config.debug_mode:
+        debug_collector = DebugCollector(config.debug_output_dir)
+
+    # 4. Instantiate and run the processing pipeline
     pipeline = ProcessingPipeline(
         inference_engine=engine,
         config=config,
-        fps_multiplier=model_info.interpolation_factor
+        fps_multiplier=model_info.interpolation_factor,
+        scene_detector=scene_detector,
+        overlay_restoration=overlay_restoration,
+        debug_collector=debug_collector
     )
     pipeline.process_video(input_video, output_video)
