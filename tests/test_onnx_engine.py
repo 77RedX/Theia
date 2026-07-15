@@ -21,7 +21,7 @@ def test_lazy_loading(mock_exists: MagicMock) -> None:
     engine = ONNXInferenceEngine("dummy.onnx")
     
     assert not engine.is_loaded
-    assert engine.input_name == ""
+    assert engine.input_names == []
     assert engine.model_spec is None
 
 
@@ -58,9 +58,9 @@ def test_successful_loading_and_metadata_extraction(
     engine.load_model()
     
     assert engine.is_loaded
-    assert engine.input_name == "frames"
+    assert engine.input_names == ["frames"]
     assert engine.output_name == "middle_frame"
-    assert engine.input_shape == ("batch_size", 6, 256, 448)
+    assert engine.input_shapes == [("batch_size", 6, 256, 448)]
     assert engine.output_shape == ("batch_size", 3, 256, 448)
     
     # Verify ModelSpec configuration object was populated correctly

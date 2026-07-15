@@ -35,9 +35,9 @@ class ONNXInferenceEngine(InferenceEngine):
             raise FileNotFoundError(f"ONNX model not found: {self._model_path}")
             
         self._session: ort.InferenceSession | None = None
-        self._input_name: str = ""
+        self._input_names: list[str] = []
         self._output_name: str = ""
-        self._input_shape: tuple = ()
+        self._input_shapes: list[tuple] = []
         self._output_shape: tuple = ()
         self._model_spec: ModelSpec | None = None
 
@@ -63,20 +63,21 @@ class ONNXInferenceEngine(InferenceEngine):
         self._session = ort.InferenceSession(str(self._model_path), providers=providers)
         
         # Extract metadata
-        session_input = self._session.get_inputs()[0]
+        session_inputs = self._session.get_inputs()
         session_output = self._session.get_outputs()[0]
         
-        self._input_name = session_input.name
-        self._input_shape = tuple(session_input.shape)
+        self._input_names = [inp.name for inp in session_inputs]
+        self._input_shapes = [tuple(inp.shape) for inp in session_inputs]
         
         self._output_name = session_output.name
         self._output_shape = tuple(session_output.shape)
         
-        # Populate model spec (assuming shape is [batch, channels, height, width])
+        # Populate model spec (assuming shape is [batch, channels, height, width] for all inputs)
+        # For multiple inputs, we assume they all share the same spatial dimensions
         self._model_spec = ModelSpec(
-            input_width=self._input_shape[3],
-            input_height=self._input_shape[2],
-            channels=self._input_shape[1]
+            input_width=self._input_shapes[0][3],
+            input_height=self._input_shapes[0][2],
+            channels=self._input_shapes[0][1]
         )
 
     @property
@@ -85,9 +86,9 @@ class ONNXInferenceEngine(InferenceEngine):
         return self._session is not None
         
     @property
-    def input_name(self) -> str:
-        """Return the name of the input tensor."""
-        return self._input_name
+    def input_names(self) -> list[str]:
+        """Return the names of the input tensors."""
+        return self._input_names
         
     @property
     def output_name(self) -> str:
@@ -95,9 +96,9 @@ class ONNXInferenceEngine(InferenceEngine):
         return self._output_name
         
     @property
-    def input_shape(self) -> tuple:
-        """Return the shape of the input tensor."""
-        return self._input_shape
+    def input_shapes(self) -> list[tuple]:
+        """Return the shapes of the input tensors."""
+        return self._input_shapes
         
     @property
     def output_shape(self) -> tuple:
@@ -135,11 +136,21 @@ class ONNXInferenceEngine(InferenceEngine):
         left_chw = P.hwc_to_chw(left_norm)
         right_chw = P.hwc_to_chw(right_norm)
         
-        # Concat along channels
-        tensor = np.concatenate([left_chw, right_chw], axis=0)
+        # For single input models, we concatenate channels
+        if len(self._input_names) == 1:
+            tensor = np.concatenate([left_chw, right_chw], axis=0)
+            return P.add_batch_dim(tensor)
         
-        # Add batch dim
-        return P.add_batch_dim(tensor)
+        # For multiple input models, we return a dict of tensors
+        elif len(self._input_names) == 2:
+            left_tensor = P.add_batch_dim(left_chw)
+            right_tensor = P.add_batch_dim(right_chw)
+            return {
+                self._input_names[0]: left_tensor,
+                self._input_names[1]: right_tensor
+            }
+        
+        raise RuntimeError(f"Unsupported number of inputs: {len(self._input_names)}")
 
     def _postprocess_frame(self, tensor: np.ndarray, orig_shape: tuple[int, int]) -> np.ndarray:
         """Postprocess the ONNX output tensor back to OpenCV BGR frame."""
@@ -162,11 +173,11 @@ class ONNXInferenceEngine(InferenceEngine):
         h, w = orig_shape
         return cv2.resize(bgr, (w, h))
 
-    def _run_inference(self, input_tensor: np.ndarray) -> np.ndarray:
+    def _run_inference(self, preprocessed_data: np.ndarray | dict[str, np.ndarray]) -> np.ndarray:
         """Execute ONNX session run.
         
         Args:
-            input_tensor: The fully preprocessed tensor.
+            preprocessed_data: Either a single tensor or a dict mapping input names to tensors.
             
         Returns:
             The raw output tensor from ONNX Runtime.
@@ -177,9 +188,14 @@ class ONNXInferenceEngine(InferenceEngine):
         if not self.is_loaded or self._session is None:
             raise RuntimeError("Model is not loaded.")
             
+        if isinstance(preprocessed_data, np.ndarray):
+            run_kwargs = {self._input_names[0]: preprocessed_data}
+        else:
+            run_kwargs = preprocessed_data
+            
         outputs = self._session.run(
             [self.output_name],
-            {self.input_name: input_tensor}
+            run_kwargs
         )
         return outputs[0]
 

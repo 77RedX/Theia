@@ -2,7 +2,7 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QFileDialog, QMessageBox
+    QFrame, QFileDialog, QMessageBox, QComboBox, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from pathlib import Path
@@ -13,7 +13,8 @@ import cv2
 class HomeScreen(QWidget):
     """Landing page where the user selects a video to enhance."""
 
-    request_processing = pyqtSignal()
+    # Emits (preset, detect_scene_cuts, protect_static_overlays)
+    request_processing = pyqtSignal(str, bool, bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -88,6 +89,48 @@ class HomeScreen(QWidget):
         self.metadata_layout.addWidget(self.lbl_format_info)
         self.metadata_layout.addStretch()
 
+        # ── Model selection ──
+        self.model_layout = QHBoxLayout()
+        self.model_layout.setSpacing(10)
+        self.lbl_model = QLabel("Model:")
+        self.lbl_model.setObjectName("SectionTitle")
+        
+        self.model_combo = QComboBox()
+        self.model_combo.setMinimumWidth(150)
+        # Import ModelRegistry to fetch available presets dynamically
+        from video_engine import ModelRegistry
+        available = ModelRegistry().available_models()
+        # Default to 'fast' (which maps to basic) if available, otherwise first
+        for model in available:
+            self.model_combo.addItem(model.capitalize(), userData=model)
+            if model == "fast":
+                self.model_combo.setCurrentText("Fast")
+                
+        self.model_layout.addStretch()
+        self.model_layout.addWidget(self.lbl_model)
+        self.model_layout.addWidget(self.model_combo)
+        self.model_layout.addStretch()
+
+        # ── Advanced Settings ──
+        self.advanced_layout = QVBoxLayout()
+        self.advanced_layout.setSpacing(5)
+        
+        self.cb_scene_cuts = QCheckBox("Detect and skip scene cuts")
+        self.cb_scene_cuts.setChecked(True)
+        
+        self.cb_protect_overlays = QCheckBox("Protect static overlays (text/HUD)")
+        self.cb_protect_overlays.setChecked(False)
+        
+        # Center the checkboxes
+        cb_container = QHBoxLayout()
+        cb_container.addStretch()
+        cb_vbox = QVBoxLayout()
+        cb_vbox.addWidget(self.cb_scene_cuts)
+        cb_vbox.addWidget(self.cb_protect_overlays)
+        cb_container.addLayout(cb_vbox)
+        cb_container.addStretch()
+        self.advanced_layout.addLayout(cb_container)
+
         # ── Buttons ──
         self.btn_select = QPushButton("Select Video")
         self.btn_select.clicked.connect(self.select_video)
@@ -106,6 +149,10 @@ class HomeScreen(QWidget):
         self.panel_layout.addWidget(self.lbl_section_title)
         self.panel_layout.addWidget(self.lbl_filename)
         self.panel_layout.addLayout(self.metadata_layout)
+        self.panel_layout.addSpacing(10)
+        self.panel_layout.addLayout(self.model_layout)
+        self.panel_layout.addSpacing(10)
+        self.panel_layout.addLayout(self.advanced_layout)
         self.panel_layout.addSpacing(10)
         self.panel_layout.addLayout(button_layout)
 
@@ -172,4 +219,7 @@ class HomeScreen(QWidget):
             )
             return
 
-        self.request_processing.emit()
+        selected_model = self.model_combo.currentData()
+        detect_scene_cuts = self.cb_scene_cuts.isChecked()
+        protect_static_overlays = self.cb_protect_overlays.isChecked()
+        self.request_processing.emit(selected_model, detect_scene_cuts, protect_static_overlays)

@@ -21,6 +21,7 @@ class ApplicationController:
         self._input_path = None
         self._output_path = None
         self._output_ext = None
+        self._preset = "basic"
         self._connect_signals()
 
     def _connect_signals(self):
@@ -39,7 +40,7 @@ class ApplicationController:
         """Navigate to the Home Screen."""
         self.main_window.show_home()
 
-    def start_processing(self):
+    def start_processing(self, preset: str, detect_scene_cuts: bool, protect_static_overlays: bool):
         """Launch the processing pipeline on a background worker thread.
 
         1. Read input path and auto-detected metadata from HomeScreen.
@@ -73,6 +74,7 @@ class ApplicationController:
         self._input_path = input_path
         self._output_path = output_path
         self._output_ext = output_ext
+        self._preset = preset
 
         # ── Navigate to ProcessingScreen ──
         self.main_window.show_processing()
@@ -85,7 +87,13 @@ class ApplicationController:
         self._start_time = time.monotonic()
 
         # ── Create and start the worker thread ──
-        self._worker = VideoProcessingWorker(input_path, output_path)
+        self._worker = VideoProcessingWorker(
+            input_path, 
+            output_path, 
+            preset, 
+            detect_scene_cuts, 
+            protect_static_overlays
+        )
         self._worker.progress_updated.connect(self._on_progress_updated)
         self._worker.log_message.connect(self._on_log_message)
         self._worker.processing_finished.connect(self._on_processing_finished)
@@ -139,7 +147,7 @@ class ApplicationController:
             cs = self.main_window.comparison_screen
             cs.set_original_video(self._input_path)
             cs.set_enhanced_video(self._output_path)
-            cs.set_preset("Fast")
+            cs.set_preset(self._preset.capitalize())
             cs.set_output_format(self._output_ext.upper())
 
             home = self.main_window.home_screen
