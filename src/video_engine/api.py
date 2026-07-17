@@ -36,6 +36,21 @@ def enhance_video(
     # 2. Instantiate and load the inference engine (currently ONNX only)
     engine = ONNXInferenceEngine(model_info.onnx_path)
     engine.load_model()
+    
+    # Log which execution provider is active
+    from .logger import logger
+    provider = engine.active_provider
+    if "Tensorrt" in provider:
+        logger.info("Using GPU acceleration via TensorRT (%s)", provider)
+    elif "CUDA" in provider:
+        logger.info("Using GPU acceleration via CUDA (%s)", provider)
+    elif "Dml" in provider:
+        logger.info("Using GPU acceleration via DirectML (%s)", provider)
+    else:
+        logger.warning(
+            "Running on CPU (%s). Install onnxruntime-gpu for GPU acceleration.",
+            provider,
+        )
 
     # 3. Instantiate optional components
     scene_detector = SceneDetector(threshold=config.scene_cut_threshold)

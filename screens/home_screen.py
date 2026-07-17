@@ -2,9 +2,11 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QFileDialog, QMessageBox, QComboBox, QCheckBox
+    QFrame, QFileDialog, QMessageBox, QComboBox, QCheckBox,
+    QGraphicsDropShadowEffect, QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 from pathlib import Path
 
 import cv2
@@ -21,6 +23,7 @@ class HomeScreen(QWidget):
         self.input_path = None
         self.detected_fps = None
         self.detected_format = None
+        self._scale = 1.0
         self.init_ui()
 
     def init_ui(self):
@@ -56,6 +59,17 @@ class HomeScreen(QWidget):
         """Create the central card with video selection and info."""
         self.panel_frame = QFrame()
         self.panel_frame.setObjectName("CardPanel")
+        self.panel_frame.setMaximumWidth(900)
+        self.panel_frame.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+
+        # Premium Drop Shadow
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(60)
+        shadow.setColor(QColor(139, 92, 246, 50))
+        shadow.setOffset(0, 12)
+        self.panel_frame.setGraphicsEffect(shadow)
 
         self.panel_layout = QVBoxLayout(self.panel_frame)
         self.panel_layout.setContentsMargins(50, 40, 50, 40)
@@ -105,6 +119,9 @@ class HomeScreen(QWidget):
             self.model_combo.addItem(model.capitalize(), userData=model)
             if model == "fast":
                 self.model_combo.setCurrentText("Fast")
+        
+        # Add the 'Pro' mode option as requested
+        self.model_combo.addItem("Pro", userData="pro")
                 
         self.model_layout.addStretch()
         self.model_layout.addWidget(self.lbl_model)
@@ -156,11 +173,11 @@ class HomeScreen(QWidget):
         self.panel_layout.addSpacing(10)
         self.panel_layout.addLayout(button_layout)
 
-        # Center the card horizontally with stretch
+        # Center the card horizontally — it will grow up to its max-width
         container = QHBoxLayout()
-        container.addStretch(1)
-        container.addWidget(self.panel_frame, stretch=4)
-        container.addStretch(1)
+        container.addStretch()
+        container.addWidget(self.panel_frame)
+        container.addStretch()
 
         self.main_layout.addLayout(container)
 
@@ -172,6 +189,29 @@ class HomeScreen(QWidget):
         self.footer_label.setObjectName("Muted")
         self.footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.main_layout.addWidget(self.footer_label)
+
+    # ── Scaling ─────────────────────────────────────────────
+
+    def apply_scale(self, s: float):
+        """Rescale margins, spacing, and max-width to match the new factor *s*."""
+        self._scale = s
+        si = lambda v: int(v * s)
+
+        self.main_layout.setContentsMargins(si(60), si(50), si(60), si(30))
+        self.main_layout.setSpacing(si(10))
+
+        self.panel_frame.setMaximumWidth(si(900))
+        self.panel_layout.setContentsMargins(si(50), si(40), si(50), si(40))
+        self.panel_layout.setSpacing(si(16))
+
+        self.metadata_layout.setSpacing(si(40))
+        self.model_combo.setMinimumWidth(si(150))
+
+        # Update shadow to scale
+        shadow = self.panel_frame.graphicsEffect()
+        if shadow and isinstance(shadow, QGraphicsDropShadowEffect):
+            shadow.setBlurRadius(si(60))
+            shadow.setOffset(0, si(12))
 
     # ── Actions ─────────────────────────────────────────────
 

@@ -1,5 +1,7 @@
+import math
+
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QResizeEvent
 
 from screens.home_screen import HomeScreen
 from screens.processing_screen import ProcessingScreen
@@ -9,148 +11,254 @@ from screens.comparison_screen import ComparisonScreen
 class TheiaApp(QMainWindow):
     """Main application window for Theia Video Enhancer."""
 
+    # Baseline resolution the UI was designed for
+    _BASE_W, _BASE_H = 1200, 700
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Theia Video Enhancer")
-        self.resize(1200, 700)
+        self.resize(self._BASE_W, self._BASE_H)
         self.setMinimumSize(900, 600)
 
-        self._apply_global_stylesheet()
+        self._current_scale = 1.0
+        self._apply_global_stylesheet(1.0)
         self.init_ui()
 
-    def _apply_global_stylesheet(self):
-        """Apply a premium dark theme across the entire application."""
-        self.setStyleSheet("""
+    # ── Scaling ─────────────────────────────────────────────
+
+    def _scale_factor(self) -> float:
+        """Compute scale factor from the current window size relative to baseline."""
+        w = self.width()
+        h = self.height()
+        diag = math.sqrt(w * w + h * h)
+        base_diag = math.sqrt(self._BASE_W ** 2 + self._BASE_H ** 2)
+        return max(0.85, diag / base_diag)
+
+    def resizeEvent(self, event: QResizeEvent):
+        """Recalculate scale and reapply stylesheet + screen layouts on resize."""
+        super().resizeEvent(event)
+        new_scale = self._scale_factor()
+        # Only re-apply if scale changed meaningfully (avoids thrashing)
+        if abs(new_scale - self._current_scale) > 0.02:
+            self._current_scale = new_scale
+            self._apply_global_stylesheet(new_scale)
+            # Notify screens so they can rescale their own metrics
+            for screen in (self.home_screen, self.processing_screen, self.comparison_screen):
+                if hasattr(screen, 'apply_scale'):
+                    screen.apply_scale(new_scale)
+
+    # ── Stylesheet ──────────────────────────────────────────
+
+    def _apply_global_stylesheet(self, s: float):
+        """Apply a premium dark theme, with every metric scaled by *s*."""
+        # Helper to round-scale an int
+        def si(v):
+            return int(v * s)
+
+        self.setStyleSheet(f"""
             /* ── Base ── */
-            QMainWindow {
-                background-color: #0f0f0f;
-            }
-            QWidget {
+            QMainWindow {{
+                background-color: #0b0b12;
+            }}
+            QWidget {{
                 background-color: transparent;
-                font-family: "Segoe UI", "Arial", sans-serif;
-            }
+                font-family: "Segoe UI Variable", "Segoe UI", "Inter", "Roboto", sans-serif;
+            }}
 
             /* ── Typography ── */
-            QLabel {
-                color: #e0e0e0;
+            QLabel {{
+                color: #e2e8f0;
                 background: transparent;
-            }
-            QLabel#Title {
+                font-size: {si(14)}px;
+            }}
+            QLabel#Title {{
                 color: #ffffff;
-                font-size: 28px;
-                font-weight: bold;
-            }
-            QLabel#Subtitle {
-                color: #888888;
-                font-size: 15px;
-            }
-            QLabel#SectionTitle {
-                color: #cccccc;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QLabel#Muted {
-                color: #666666;
-                font-size: 12px;
-            }
-            QLabel#Accent {
-                color: #6c63ff;
-            }
+                font-size: {si(36)}px;
+                font-weight: 800;
+            }}
+            QLabel#Subtitle {{
+                color: #94a3b8;
+                font-size: {si(16)}px;
+                font-weight: 500;
+            }}
+            QLabel#SectionTitle {{
+                color: #cbd5e1;
+                font-size: {si(15)}px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }}
+            QLabel#Muted {{
+                color: #64748b;
+                font-size: {si(13)}px;
+                font-weight: 500;
+            }}
+            QLabel#Accent {{
+                color: #a78bfa;
+                font-size: {si(16)}px;
+                font-weight: 700;
+            }}
 
             /* ── Cards ── */
-            QFrame#CardPanel {
-                background-color: #1a1a2e;
-                border: 1px solid #2a2a4a;
-                border-radius: 16px;
-            }
+            QFrame#CardPanel {{
+                background-color: #151522;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: {si(20)}px;
+            }}
 
             /* ── Primary Buttons ── */
-            QPushButton {
-                background-color: #6c63ff;
+            QPushButton {{
+                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #8b5cf6, stop:1 #6366f1);
                 color: #ffffff;
                 border: none;
-                border-radius: 10px;
-                padding: 14px 32px;
-                font-size: 14px;
-                font-weight: bold;
-                min-width: 160px;
-                min-height: 20px;
-            }
-            QPushButton:hover {
-                background-color: #7b73ff;
-            }
-            QPushButton:pressed {
-                background-color: #5a52e0;
-            }
+                border-radius: {si(12)}px;
+                padding: {si(14)}px {si(32)}px;
+                font-size: {si(15)}px;
+                font-weight: 700;
+                min-width: {si(160)}px;
+            }}
+            QPushButton:hover {{
+                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #a78bfa, stop:1 #818cf8);
+            }}
+            QPushButton:pressed {{
+                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #7c3aed, stop:1 #4f46e5);
+            }}
+            QPushButton:disabled {{
+                background-color: #334155;
+                color: #94a3b8;
+            }}
 
             /* ── Secondary / Outline Buttons ── */
-            QPushButton#SecondaryButton {
-                background-color: transparent;
-                color: #6c63ff;
-                border: 2px solid #6c63ff;
-            }
-            QPushButton#SecondaryButton:hover {
-                background-color: rgba(108, 99, 255, 0.1);
-            }
-            QPushButton#SecondaryButton:pressed {
-                background-color: rgba(108, 99, 255, 0.2);
-            }
+            QPushButton#SecondaryButton {{
+                background-color: rgba(139, 92, 246, 0.1);
+                color: #a78bfa;
+                border: 1px solid rgba(139, 92, 246, 0.3);
+            }}
+            QPushButton#SecondaryButton:hover {{
+                background-color: rgba(139, 92, 246, 0.2);
+                border: 1px solid rgba(139, 92, 246, 0.5);
+            }}
+            QPushButton#SecondaryButton:pressed {{
+                background-color: rgba(139, 92, 246, 0.3);
+            }}
 
             /* ── Danger Buttons ── */
-            QPushButton#DangerButton {
-                background-color: transparent;
-                color: #ff6b6b;
-                border: 2px solid #ff6b6b;
-            }
-            QPushButton#DangerButton:hover {
-                background-color: rgba(255, 107, 107, 0.1);
-            }
+            QPushButton#DangerButton {{
+                background-color: rgba(239, 68, 68, 0.1);
+                color: #fca5a5;
+                border: 1px solid rgba(239, 68, 68, 0.3);
+            }}
+            QPushButton#DangerButton:hover {{
+                background-color: rgba(239, 68, 68, 0.2);
+                border: 1px solid rgba(239, 68, 68, 0.5);
+            }}
 
             /* ── Progress Bar ── */
-            QProgressBar {
+            QProgressBar {{
                 border: none;
-                border-radius: 8px;
-                background-color: #1a1a2e;
-                min-height: 16px;
-                max-height: 16px;
+                border-radius: {si(10)}px;
+                background-color: #1e1e2d;
+                min-height: {si(20)}px;
+                max-height: {si(20)}px;
                 text-align: center;
                 color: transparent;
-            }
-            QProgressBar::chunk {
-                border-radius: 8px;
+            }}
+            QProgressBar::chunk {{
+                border-radius: {si(10)}px;
                 background: qlineargradient(
                     x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #6c63ff, stop:1 #3f8efc
+                    stop:0 #ec4899, stop:0.5 #8b5cf6, stop:1 #3b82f6
                 );
-            }
+            }}
+
+            /* ── Combo Box ── */
+            QComboBox {{
+                background-color: #1e1e2d;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: {si(8)}px;
+                padding: {si(8)}px {si(16)}px;
+                color: #e2e8f0;
+                font-size: {si(14)}px;
+                font-weight: 500;
+                min-width: {si(150)}px;
+            }}
+            QComboBox:hover {{
+                border: 1px solid rgba(139, 92, 246, 0.5);
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: {si(30)}px;
+                subcontrol-position: right center;
+                subcontrol-origin: padding;
+            }}
+            QComboBox::down-arrow {{
+                image: url(assets/dropdown_arrow.svg);
+                width: {si(12)}px;
+                height: {si(12)}px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: #151522;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: {si(8)}px;
+                color: #e2e8f0;
+                selection-background-color: #8b5cf6;
+                selection-color: #ffffff;
+                outline: none;
+                padding: {si(4)}px;
+                font-size: {si(14)}px;
+            }}
+
+            /* ── CheckBox ── */
+            QCheckBox {{
+                color: #cbd5e1;
+                font-size: {si(14)}px;
+                spacing: {si(10)}px;
+            }}
+            QCheckBox::indicator {{
+                width: {si(20)}px;
+                height: {si(20)}px;
+                border-radius: {si(6)}px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                background-color: #151522;
+            }}
+            QCheckBox::indicator:hover {{
+                border: 1px solid #8b5cf6;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: #8b5cf6;
+                border: 1px solid #8b5cf6;
+            }}
 
             /* ── Log / Terminal ── */
-            QTextEdit {
-                background-color: #0a0a14;
-                color: #4ade80;
-                border: 1px solid #2a2a4a;
-                border-radius: 10px;
-                padding: 12px;
-                font-family: "Cascadia Code", "Consolas", monospace;
-                font-size: 13px;
-                selection-background-color: #6c63ff;
-            }
+            QTextEdit {{
+                background-color: #0d0d16;
+                color: #10b981;
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-radius: {si(12)}px;
+                padding: {si(16)}px;
+                font-family: "Cascadia Code", "Consolas", "Fira Code", monospace;
+                font-size: {si(14)}px;
+                selection-background-color: rgba(139, 92, 246, 0.4);
+            }}
 
             /* ── Scrollbars ── */
-            QScrollBar:vertical {
-                background: #0a0a14;
-                width: 8px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background: #333;
-                border-radius: 4px;
-                min-height: 30px;
-            }
+            QScrollBar:vertical {{
+                background: #0b0b12;
+                width: {si(10)}px;
+                border-radius: {si(5)}px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: #334155;
+                border-radius: {si(5)}px;
+                min-height: {si(40)}px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: #475569;
+            }}
             QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {
+            QScrollBar::sub-line:vertical {{
                 height: 0px;
-            }
+            }}
         """)
 
     def init_ui(self):

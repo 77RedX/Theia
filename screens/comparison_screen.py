@@ -1,10 +1,11 @@
 """Comparison Screen for the Theia Video Enhancer."""
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QSlider
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QSlider, QGraphicsDropShadowEffect, QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtGui import QImage, QPixmap, QColor
 from pathlib import Path
 
 import cv2
@@ -20,9 +21,10 @@ class VideoPlayerWidget(QFrame):
     def __init__(self, title: str, parent=None):
         super().__init__(parent)
         self.setStyleSheet(
-            "background-color: #0a0a14; border: 1px solid #2a2a4a; border-radius: 10px;"
+            "background-color: #0d0d16; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;"
         )
         self.setMinimumHeight(240)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self._cap = None
         self._fps = 30.0
@@ -38,6 +40,7 @@ class VideoPlayerWidget(QFrame):
         self.lbl_video.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_video.setStyleSheet("color: #555; border: none;")
         self.lbl_video.setMinimumHeight(180)
+        self.lbl_video.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout.addWidget(self.lbl_video, stretch=1)
 
         # Filename label
@@ -151,6 +154,7 @@ class ComparisonScreen(QWidget):
         super().__init__(parent)
         self._is_playing = False
         self._original_frame_accumulator = 0.0
+        self._scale = 1.0
         self._playback_timer = QTimer(self)
         self._playback_timer.timeout.connect(self._on_timer_tick)
         self.init_ui()
@@ -188,6 +192,16 @@ class ComparisonScreen(QWidget):
         """Create the card with comparison panels and info."""
         self.panel_frame = QFrame()
         self.panel_frame.setObjectName("CardPanel")
+        self.panel_frame.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+
+        # Glow shadow
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(60)
+        shadow.setColor(QColor(139, 92, 246, 40))
+        shadow.setOffset(0, 10)
+        self.panel_frame.setGraphicsEffect(shadow)
 
         self.panel_layout = QVBoxLayout(self.panel_frame)
         self.panel_layout.setContentsMargins(35, 30, 35, 30)
@@ -197,10 +211,10 @@ class ComparisonScreen(QWidget):
         self._setup_playback_controls()
         self._setup_info_section()
 
-        # Full-width card
+        # The card should fill the available space
         container = QHBoxLayout()
         container.addStretch(1)
-        container.addWidget(self.panel_frame, stretch=8)
+        container.addWidget(self.panel_frame, stretch=10)
         container.addStretch(1)
 
         self.main_layout.addLayout(container)
@@ -239,7 +253,7 @@ class ComparisonScreen(QWidget):
         comparison_layout.addLayout(left_panel)
         comparison_layout.addLayout(right_panel)
 
-        self.panel_layout.addLayout(comparison_layout)
+        self.panel_layout.addLayout(comparison_layout, stretch=1)
 
     def _setup_playback_controls(self):
         """Create play/pause and restart controls."""
@@ -321,6 +335,24 @@ class ComparisonScreen(QWidget):
 
         self.main_layout.addSpacing(10)
         self.main_layout.addLayout(btn_layout)
+
+    # ── Scaling ─────────────────────────────────────────────
+
+    def apply_scale(self, s: float):
+        """Rescale layout metrics to match the scale factor *s*."""
+        self._scale = s
+        si = lambda v: int(v * s)
+
+        self.main_layout.setContentsMargins(si(60), si(50), si(60), si(30))
+        self.main_layout.setSpacing(si(10))
+
+        self.panel_layout.setContentsMargins(si(35), si(30), si(35), si(30))
+        self.panel_layout.setSpacing(si(16))
+
+        shadow = self.panel_frame.graphicsEffect()
+        if shadow and isinstance(shadow, QGraphicsDropShadowEffect):
+            shadow.setBlurRadius(si(60))
+            shadow.setOffset(0, si(10))
 
     # ── Playback Logic ──────────────────────────────────────
 

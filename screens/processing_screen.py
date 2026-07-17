@@ -2,9 +2,11 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QProgressBar, QTextEdit, QMessageBox
+    QFrame, QProgressBar, QTextEdit, QMessageBox,
+    QGraphicsDropShadowEffect, QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 from datetime import datetime
 
 
@@ -15,6 +17,7 @@ class ProcessingScreen(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._scale = 1.0
         self.init_ui()
 
     def init_ui(self):
@@ -50,6 +53,17 @@ class ProcessingScreen(QWidget):
         """Create the card with progress, stats, and log."""
         self.panel_frame = QFrame()
         self.panel_frame.setObjectName("CardPanel")
+        self.panel_frame.setMaximumWidth(1100)
+        self.panel_frame.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+
+        # Premium glow shadow
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(60)
+        shadow.setColor(QColor(139, 92, 246, 40))
+        shadow.setOffset(0, 10)
+        self.panel_frame.setGraphicsEffect(shadow)
 
         self.panel_layout = QVBoxLayout(self.panel_frame)
         self.panel_layout.setContentsMargins(40, 35, 40, 35)
@@ -59,10 +73,10 @@ class ProcessingScreen(QWidget):
         self._setup_statistics_section()
         self._setup_log_section()
 
-        # Full-width card with side margins via stretch
+        # The card stretches to fill available space, centered
         container = QHBoxLayout()
         container.addStretch(1)
-        container.addWidget(self.panel_frame, stretch=6)
+        container.addWidget(self.panel_frame, stretch=8)
         container.addStretch(1)
 
         self.main_layout.addLayout(container)
@@ -113,6 +127,9 @@ class ProcessingScreen(QWidget):
         self.log_text_edit.setReadOnly(True)
         self.log_text_edit.setText("Ready to start processing...")
         self.log_text_edit.setMinimumHeight(160)
+        self.log_text_edit.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         # No inline setStyleSheet — uses global QTextEdit style from app.py
 
         self.panel_layout.addWidget(self.log_text_edit)
@@ -132,6 +149,27 @@ class ProcessingScreen(QWidget):
 
         self.main_layout.addSpacing(10)
         self.main_layout.addLayout(btn_layout)
+
+    # ── Scaling ─────────────────────────────────────────────
+
+    def apply_scale(self, s: float):
+        """Rescale layout metrics to match the scale factor *s*."""
+        self._scale = s
+        si = lambda v: int(v * s)
+
+        self.main_layout.setContentsMargins(si(60), si(50), si(60), si(30))
+        self.main_layout.setSpacing(si(10))
+
+        self.panel_frame.setMaximumWidth(si(1100))
+        self.panel_layout.setContentsMargins(si(40), si(35), si(40), si(35))
+        self.panel_layout.setSpacing(si(20))
+
+        self.log_text_edit.setMinimumHeight(si(160))
+
+        shadow = self.panel_frame.graphicsEffect()
+        if shadow and isinstance(shadow, QGraphicsDropShadowEffect):
+            shadow.setBlurRadius(si(60))
+            shadow.setOffset(0, si(10))
 
     # ── Public API ──────────────────────────────────────────
 

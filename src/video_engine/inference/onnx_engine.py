@@ -46,21 +46,40 @@ class ONNXInferenceEngine(InferenceEngine):
         
         Creates the session, selects the best execution provider, and extracts
         input/output metadata directly from the model.
+        
+        Provider priority: TensorrtExecutionProvider > CUDAExecutionProvider > DmlExecutionProvider > CPUExecutionProvider
         """
         if self._session is not None:
             return  # Already loaded
             
         # Detect available providers
         available_providers = ort.get_available_providers()
-        providers = []
-        if "CUDAExecutionProvider" in available_providers:
-            providers.append("CUDAExecutionProvider")
-        if "DmlExecutionProvider" in available_providers:
-            providers.append("DmlExecutionProvider")
-        providers.append("CPUExecutionProvider")
         
-        # Create session
-        self._session = ort.InferenceSession(str(self._model_path), providers=providers)
+        # Build ordered list: prefer GPU providers (fastest first)
+        providers = []
+        if "TensorrtExecutionProvider" in available_providers:
+            providers.append(("TensorrtExecutionProvider", {}))
+        if "CUDAExecutionProvider" in available_providers:
+            providers.append(("CUDAExecutionProvider", {}))
+        if "DmlExecutionProvider" in available_providers:
+            providers.append(("DmlExecutionProvider", {}))
+        providers.append(("CPUExecutionProvider", {}))
+        
+        provider_names = [p[0] for p in providers]
+        
+        # Create session with ordered provider preference
+        session_options = ort.SessionOptions()
+        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        
+        self._session = ort.InferenceSession(
+            str(self._model_path),
+            sess_options=session_options,
+            providers=provider_names,
+        )
+        
+        # Log which provider was actually selected
+        active = self._session.get_providers()
+        self._active_provider = active[0] if active else "CPUExecutionProvider"
         
         # Extract metadata
         session_inputs = self._session.get_inputs()
@@ -84,6 +103,11 @@ class ONNXInferenceEngine(InferenceEngine):
     def is_loaded(self) -> bool:
         """Return True if the model has been loaded."""
         return self._session is not None
+
+    @property
+    def active_provider(self) -> str:
+        """Return the name of the execution provider actually in use."""
+        return getattr(self, '_active_provider', 'CPUExecutionProvider')
         
     @property
     def input_names(self) -> list[str]:

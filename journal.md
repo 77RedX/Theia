@@ -124,5 +124,17 @@ This journal tracks the development of the **Theia Video Enhancer**, an AI-power
   - **Playback controls**: Added ▶ Play / ⏸ Pause toggle and ⏮ Restart buttons. A `QTimer` fires at the enhanced video's native FPS to drive both players simultaneously. Playback auto-starts when the comparison screen appears via `start_playback()` called from the controller.
   - **Navigation safety**: The `_on_navigate_home()` method pauses playback and releases video captures before navigating away, preventing resource leaks.
 
+### 12. UI Scaling, Dropdown Fix, and GPU Acceleration
+**Objective**: Ensure the UI scales perfectly in maximized mode, fix the broken combo box arrow, and resolve the issue where the AI engine was only running on the CPU.
+- **Root cause analysis**:
+  - **UI Scaling**: Hardcoded pixel values in `app.py`'s stylesheet and hardcoded stretch ratios in layout code prevented the UI from resizing gracefully when the window was maximized.
+  - **Dropdown Arrow**: The `QComboBox` drop-down arrow was using CSS border hacks (`border-left`/`border-bottom`) which Qt's stylesheet engine does not render.
+  - **GPU Processing**: The project depended on `onnxruntime` (which is CPU-only) instead of `onnxruntime-gpu`. The inference engine silently fell back to `CPUExecutionProvider`.
+- **Implementation**:
+  - **Dynamic Scaling System**: Rewrote `app.py` to calculate a scale factor (`window_diagonal / base_diagonal`) on every `resizeEvent`. Re-applied the stylesheet with all pixel metrics dynamically multiplied by this scale factor. Added `apply_scale()` to all screens to similarly scale margins, maximum widths, and spacing, ensuring a responsive design.
+  - **Dropdown Fix**: Created a clean SVG chevron (`assets/dropdown_arrow.svg`) and updated the `QComboBox::down-arrow` rule to properly reference it using `image: url()`.
+  - **GPU Support (`onnxruntime-directml`)**: Replaced `onnxruntime-gpu` (which failed to load due to missing CUDA 13.x DLLs globally on the system) with `onnxruntime-directml` in `requirements-inference.txt` and the virtual environment. DirectML leverages DirectX 12 to run hardware-accelerated machine learning on any modern GPU without requiring the massive NVIDIA CUDA Toolkit, making it plug-and-play for the end user.
+  - **Provider Logic & Logging**: Updated `ONNXInferenceEngine` to explicitly prioritize `TensorrtExecutionProvider > CUDAExecutionProvider > DmlExecutionProvider > CPUExecutionProvider`. Added an `active_provider` property and updated `api.py` to log which backend is being utilized so the user has immediate feedback.
+
 ---
-**Status**: All critical bugs resolved. The application processes videos on a background thread (no freezing), displays a live ETA countdown, supports processing cancellation, correctly tracks progress 0–100%, and plays both original and enhanced videos side-by-side on the comparison screen.
+**Status**: The application features a dynamic, scalable premium dark theme, supports correct model selection, and correctly utilizes NVIDIA GPUs (via DirectML) for dramatically faster inference out-of-the-box.
