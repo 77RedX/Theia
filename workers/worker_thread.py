@@ -18,10 +18,13 @@ class VideoProcessingWorker(QThread):
     log_message = pyqtSignal(str)
     processing_finished = pyqtSignal(bool, str)
 
-    def __init__(self, input_path: str, output_path: str, parent=None):
+    def __init__(self, input_path: str, output_path: str, preset: str, detect_scene_cuts: bool, protect_static_overlays: bool, parent=None):
         super().__init__(parent)
         self.input_path = input_path
         self.output_path = output_path
+        self.preset = preset
+        self.detect_scene_cuts = detect_scene_cuts
+        self.protect_static_overlays = protect_static_overlays
         self._cancelled = False
 
     def cancel(self):
@@ -51,7 +54,9 @@ class VideoProcessingWorker(QThread):
                     )
 
             config = TheiaConfig(
-                preset="fast",
+                preset=self.preset,
+                detect_scene_cuts=self.detect_scene_cuts,
+                protect_static_overlays=self.protect_static_overlays,
                 progress_callback=progress_callback,
             )
 

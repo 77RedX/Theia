@@ -1,0 +1,47 @@
+{
+  "model_name": "PlusFlowInterp",
+  "version": "1.0.0",
+  "backend": "onnx",
+  "opset": 17,
+  "interpolation_factor": 2,
+
+  "input": {
+    "name": "img1, img3",
+    "color_space": "RGB",
+    "dtype": "float32",
+    "range": [0.0, 1.0],
+    "layout": "NCHW",
+    "channels": 3,
+    "width": 448,
+    "height": 256,
+    "dynamic_batch": true,
+    "dynamic_resolution": false
+  },
+
+  "output": {
+    "name": "output",
+    "color_space": "RGB",
+    "dtype": "float32",
+    "range": [0.0, 1.0],
+    "layout": "NCHW",
+    "channels": 3
+  },
+
+  "interpolation": {
+    "input_frames": 2,
+    "output_frames": 1
+  },
+
+  "preprocessing": {
+    "resize": true,
+    "target_size": [448, 256],
+    "convert_bgr_to_rgb": true,
+    "normalize": true
+  },
+
+  "postprocessing": {
+    "resize_back": true,
+    "convert_rgb_to_bgr": true,
+    "denormalize": true
+  }
+}
