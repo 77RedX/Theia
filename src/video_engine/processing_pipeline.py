@@ -230,9 +230,13 @@ class ProcessingPipeline:
                         logger.error("Failed to merge audio: %s. Falling back to video-only.", e)
                         shutil.move(str(temp_video_path), str(output_video))
                 else:
-                    # No audio to merge, just move the temp video to the final destination
-                    logger.info("Moving video-only output to %s", output_video)
-                    shutil.move(str(temp_video_path), str(output_video))
+                    # No audio to merge, compress the temp video to the final destination
+                    try:
+                        audio_manager.compress_video(temp_video_path, output_video)
+                        logger.info("Video compressed successfully into %s", output_video)
+                    except Exception as e:
+                        logger.error("Failed to compress video: %s. Falling back to uncompressed video.", e)
+                        shutil.move(str(temp_video_path), str(output_video))
                     
             finally:
                 # Clean up the temporary video file if it still exists

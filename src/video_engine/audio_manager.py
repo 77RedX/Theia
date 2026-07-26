@@ -139,8 +139,11 @@ class AudioManager:
             "-y",
             "-i", str(video_path),
             "-i", str(audio_path),
-            "-c:v", "copy",  # Copy video stream without re-encoding
-            "-c:a", "copy",  # Copy audio stream without re-encoding
+            "-c:v", "libx264",  # Re-encode video for compression
+            "-crf", "23",       # Balance between quality and file size
+            "-preset", "fast",  # Speed up compression
+            "-pix_fmt", "yuv420p", # Ensure wide compatibility
+            "-c:a", "copy",     # Copy audio stream without re-encoding
             "-loglevel", "error",
             str(final_output_path)
         ]
@@ -158,6 +161,43 @@ class AudioManager:
             else:
                 logger.error("Failed to merge audio: %s", e.stderr)
                 raise AudioProcessingError(f"ffmpeg merge failed: {e.stderr}") from e
+
+    def compress_video(self, video_path: str | Path, final_output_path: str | Path) -> bool:
+        """Compress a video-only file using FFmpeg."""
+        self._verify_ffmpeg_available()
+        video_path = Path(video_path)
+        final_output_path = Path(final_output_path)
+        
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+            
+        final_output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        command = [
+            "ffmpeg",
+            "-y",
+            "-i", str(video_path),
+            "-c:v", "libx264",
+            "-crf", "23",
+            "-preset", "fast",
+            "-pix_fmt", "yuv420p",
+            "-loglevel", "error",
+            str(final_output_path)
+        ]
+        
+        logger.info("Compressing video %s -> %s", video_path, final_output_path)
+        try:
+            subprocess.run(command, capture_output=True, text=True, check=True, timeout=FFMPEG_TIMEOUT)
+            if not final_output_path.exists():
+                raise AudioProcessingError("ffmpeg compress succeeded but output file not found")
+            return True
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            if isinstance(e, subprocess.TimeoutExpired):
+                logger.error("Failed to compress video: timed out")
+                raise AudioProcessingError(f"ffmpeg compress timed out after {FFMPEG_TIMEOUT}s") from e
+            else:
+                logger.error("Failed to compress video: %s", e.stderr)
+                raise AudioProcessingError(f"ffmpeg compress failed: {e.stderr}") from e
 
     def cleanup(self) -> None:
         """Delete any temporary audio files created by this instance."""
