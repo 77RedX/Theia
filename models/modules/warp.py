@@ -10,6 +10,7 @@ class Warper(nn.Module):
     def __init__(self):
         super(Warper, self).__init__()
         self.grid_cache = {}
+        self.scale_cache = {}
 
     def forward(self, img, flow):
         """
@@ -35,6 +36,7 @@ class Warper(nn.Module):
             # Stack into (1, H, W, 2)
             base_grid = torch.stack((grid_x, grid_y), dim=-1).float().unsqueeze(0)
             self.grid_cache[key] = base_grid
+            self.scale_cache[key] = torch.tensor([max(W - 1, 1), max(H - 1, 1)], device=device).float()
 
         # Expand base grid to match the batch size
         base_grid = self.grid_cache[key].expand(B, -1, -1, -1)
@@ -45,7 +47,7 @@ class Warper(nn.Module):
         
         # Normalize grid to [-1, 1] for grid_sample
         # Scale factors to convert pixel coordinates to normalized coordinates
-        scale = torch.tensor([max(W - 1, 1), max(H - 1, 1)], device=device).float()
+        scale = self.scale_cache[key]
         
         vgrid = 2.0 * vgrid / scale - 1.0
         

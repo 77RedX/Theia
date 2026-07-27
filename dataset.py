@@ -32,7 +32,7 @@ class VimeoTripletDataset(Dataset):
         x = torch.cat([im1, im3], dim=0)
         y = im2
 
-        return x, y
+        return im1, im2, im3
 
 
     def get_dataloaders(
