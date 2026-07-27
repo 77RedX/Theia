@@ -20,3 +20,4 @@ Theia_preprocess.o*
 
 # Datasets (don't commit large datasets)
 data/
+docs/

@@ -1,12 +1,12 @@
 import os
 import torch
 
-from models.plus_model import PlusModel
+from models.pro_model import ProModel
 
 # ---------------- CONFIG ----------------
-CHECKPOINT = "/home/akshaygautam4451/Theia/checkpoints/best_plus_model.pth"
-OUTPUT_DIR = "/home/akshaygautam4451/Theia/weights"
-OUTPUT_FILE = "plus_model.onnx"
+CHECKPOINT = "checkpoints/best_pro_model.pth"
+OUTPUT_DIR = "weights"
+OUTPUT_FILE = "pro_model.onnx"
 
 HEIGHT = 256
 WIDTH = 448
@@ -17,7 +17,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 device = torch.device("cpu")
 
 # Load model
-model = PlusModel().to(device)
+model = ProModel().to(device)
 
 ckpt = torch.load(
     CHECKPOINT,
@@ -26,11 +26,11 @@ ckpt = torch.load(
 )
 
 model.load_state_dict(ckpt["model"])
-# Set to eval mode. For PlusModel, this ensures training=False 
+# Set to eval mode. For ProModel, this ensures training=False 
 # so it returns the final tensor instead of the multi-scale dictionary.
 model.eval()
 
-# PlusModel requires two separate inputs (Frame 1 and Frame 3)
+# ProModel requires two separate inputs (Frame 1 and Frame 3)
 dummy_img1 = torch.randn(1, 3, HEIGHT, WIDTH, device=device)
 dummy_img3 = torch.randn(1, 3, HEIGHT, WIDTH, device=device)
 
