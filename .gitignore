@@ -72,7 +72,7 @@ venv.bak/
 # OS files
 .DS_Store
 Thumbs.db
-
+weights/
 test_videos/
 videos/
 debug/
