@@ -21,3 +21,7 @@ Theia_preprocess.o*
 # Datasets (don't commit large datasets)
 data/
 docs/
+
+# Models too big to upload
+weights/pro_model.onnx
+weights/best_pro_model.pth
