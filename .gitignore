@@ -12,6 +12,8 @@ checkpoints/
 build/
 develop-eggs/
 dist/
+Output/
+*.exe
 downloads/
 eggs/
 .eggs/
@@ -74,3 +76,8 @@ Thumbs.db
 test_videos/
 videos/
 debug/
+
+# Build scripts and generated assets
+convert_icon.py
+setup.iss
+app_icon.ico
