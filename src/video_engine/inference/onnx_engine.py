@@ -91,12 +91,16 @@ class ONNXInferenceEngine(InferenceEngine):
         self._output_name = session_output.name
         self._output_shape = tuple(session_output.shape)
         
-        # Populate model spec (assuming shape is [batch, channels, height, width] for all inputs)
-        # For multiple inputs, we assume they all share the same spatial dimensions
+        # Populate model spec
+        # Handle dynamic axes where shape might be a string (e.g. "height", "width") instead of int
+        w_dim = self._input_shapes[0][3]
+        h_dim = self._input_shapes[0][2]
+        c_dim = self._input_shapes[0][1]
+        
         self._model_spec = ModelSpec(
-            input_width=self._input_shapes[0][3],
-            input_height=self._input_shapes[0][2],
-            channels=self._input_shapes[0][1]
+            input_width=w_dim if isinstance(w_dim, int) else -1,
+            input_height=h_dim if isinstance(h_dim, int) else -1,
+            channels=c_dim if isinstance(c_dim, int) else 3
         )
 
     @property
@@ -143,6 +147,10 @@ class ONNXInferenceEngine(InferenceEngine):
             raise RuntimeError("Model spec is not initialized.")
             
         w, h = self.model_spec.input_width, self.model_spec.input_height
+        
+        # If the ONNX model uses dynamic resolution, skip forced resizing and use the native frame size
+        if w == -1 or h == -1:
+            w, h = left.shape[1], left.shape[0]
         
         # Resize
         left_resized = cv2.resize(left, (w, h))

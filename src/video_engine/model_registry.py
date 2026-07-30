@@ -24,7 +24,7 @@ class ModelRegistry:
     PRESET_MAPPING = {
         "fast": "basic",
         "balanced": "plus",
-        "quality": "pro"
+        "pro": "pro"
     }
 
     def __init__(self, models_dir: str | Path = "models") -> None:

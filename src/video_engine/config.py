@@ -22,8 +22,8 @@ class TheiaConfig:
     def __post_init__(self) -> None:
         """Validate configuration values."""
         # Validate preset
-        if self.preset.lower() not in {"fast", "balanced", "quality"}:
-            raise ValueError(f"Invalid preset: '{self.preset}'. Must be one of 'fast', 'balanced', 'quality'.")
+        if self.preset.lower() not in {"fast", "balanced", "pro"}:
+            raise ValueError(f"Invalid preset: '{self.preset}'. Must be one of 'fast', 'balanced', 'pro'.")
             
         # Validate backend
         if self.backend.lower() not in {"onnx"}:

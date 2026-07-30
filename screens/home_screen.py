@@ -120,9 +120,7 @@ class HomeScreen(QWidget):
             if model == "fast":
                 self.model_combo.setCurrentText("Fast")
         
-        # Add the 'Pro' mode option as requested
-        self.model_combo.addItem("Pro", userData="pro")
-                
+        
         self.model_layout.addStretch()
         self.model_layout.addWidget(self.lbl_model)
         self.model_layout.addWidget(self.model_combo)
