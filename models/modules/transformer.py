@@ -33,8 +33,9 @@ class LocalWindowTransformer(nn.Module):
         # Pad to ensure divisibility by window_size
         pad_h = (self.window_size - H % self.window_size) % self.window_size
         pad_w = (self.window_size - W % self.window_size) % self.window_size
-        if pad_h > 0 or pad_w > 0:
-            x = F.pad(x, (0, pad_w, 0, pad_h))
+        
+        # Always pad (even with 0s) to avoid Python boolean evaluation in ONNX export
+        x = F.pad(x, (0, pad_w, 0, pad_h))
             
         _, _, Hp, Wp = x.shape
         
@@ -53,8 +54,8 @@ class LocalWindowTransformer(nn.Module):
         out = out.permute(0, 5, 1, 3, 2, 4).contiguous().reshape(B, C, Hp, Wp)
         
         # Unpad
-        if pad_h > 0 or pad_w > 0:
-            out = out[:, :, :H, :W]
+        # Slice unconditionally to avoid Python boolean evaluation in ONNX export
+        out = out[:, :, :H, :W]
             
         # Residual refinement
         return identity + out

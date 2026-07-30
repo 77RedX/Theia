@@ -76,7 +76,11 @@ class ONNXSafeDCN(nn.Module):
                 indexing="ij"
             )
             self.grid_cache[key] = torch.stack([grid_x, grid_y], dim=-1).unsqueeze(0)  # [1, H, W, 2]
-            self.scale_cache[key] = torch.tensor([max(W - 1, 1), max(H - 1, 1)], device=device).float()
+            
+            # Use torch operations to avoid TracerWarning with Python booleans during ONNX export
+            scale_w = torch.clamp(torch.as_tensor(W - 1, device=device, dtype=torch.float32), min=1.0)
+            scale_h = torch.clamp(torch.as_tensor(H - 1, device=device, dtype=torch.float32), min=1.0)
+            self.scale_cache[key] = torch.stack([scale_w, scale_h])
             
         base_grid = self.grid_cache[key]
         scale = self.scale_cache[key]

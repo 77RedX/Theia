@@ -31,8 +31,9 @@ class DecoderLevel(nn.Module):
         x = self.up(x)
         
         # Guard against minor shape mismatches due to pooling/padding during encoder downsampling
-        if x.shape[2:] != skip1.shape[2:]:
-            x = F.interpolate(x, size=skip1.shape[2:], mode='bilinear', align_corners=False)
+        # Unconditionally interpolate to avoid TracerWarning for boolean eval in ONNX export.
+        # This is a fast no-op if sizes already match.
+        x = F.interpolate(x, size=skip1.shape[2:], mode='bilinear', align_corners=False)
             
         # Concatenate upsampled features with aligned encoder skip connections
         x_cat = torch.cat([x, skip1, skip3], dim=1)
