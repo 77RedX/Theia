@@ -1,6 +1,7 @@
 """Model Registry for managing deployed AI models."""
 
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,12 +28,17 @@ class ModelRegistry:
         "pro": "pro"
     }
 
-    def __init__(self, models_dir: str | Path = "models") -> None:
+    def __init__(self, models_dir: str | Path | None = None) -> None:
         """Initialize the model registry.
         
         Args:
             models_dir: The root directory containing deployed model packages.
         """
+        if models_dir is None or models_dir == "models":
+            if getattr(sys, 'frozen', False):
+                models_dir = Path(sys._MEIPASS) / "models"
+            else:
+                models_dir = "models"
         self._models_dir = Path(models_dir)
 
     def _validate_model_dir(self, preset: str, folder_name: str) -> ModelInfo:

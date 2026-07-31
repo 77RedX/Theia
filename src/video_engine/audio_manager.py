@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import types
 from pathlib import Path
@@ -56,7 +57,10 @@ class AudioManager:
         ]
         
         try:
-            result = subprocess.run(command, capture_output=True, text=True, check=True, timeout=FFMPEG_TIMEOUT)
+            result = subprocess.run(
+                command, capture_output=True, text=True, check=True, timeout=FFMPEG_TIMEOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            )
             # If ffprobe outputs any stream information, an audio stream exists.
             return bool(result.stdout.strip())
         except subprocess.CalledProcessError as e:
@@ -97,7 +101,10 @@ class AudioManager:
         
         logger.info("Extracting audio from %s to %s", video_path, temp_audio_path)
         try:
-            subprocess.run(command, capture_output=True, text=True, check=True, timeout=FFMPEG_TIMEOUT)
+            subprocess.run(
+                command, capture_output=True, text=True, check=True, timeout=FFMPEG_TIMEOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            )
             return temp_audio_path
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             if temp_audio_path.exists():
@@ -150,7 +157,10 @@ class AudioManager:
         
         logger.info("Merging audio %s into video %s -> %s", audio_path, video_path, final_output_path)
         try:
-            subprocess.run(command, capture_output=True, text=True, check=True, timeout=FFMPEG_TIMEOUT)
+            subprocess.run(
+                command, capture_output=True, text=True, check=True, timeout=FFMPEG_TIMEOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            )
             if not final_output_path.exists():
                 raise AudioProcessingError("ffmpeg merge succeeded but output file not found")
             return True
@@ -187,7 +197,10 @@ class AudioManager:
         
         logger.info("Compressing video %s -> %s", video_path, final_output_path)
         try:
-            subprocess.run(command, capture_output=True, text=True, check=True, timeout=FFMPEG_TIMEOUT)
+            subprocess.run(
+                command, capture_output=True, text=True, check=True, timeout=FFMPEG_TIMEOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            )
             if not final_output_path.exists():
                 raise AudioProcessingError("ffmpeg compress succeeded but output file not found")
             return True

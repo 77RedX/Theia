@@ -8,9 +8,14 @@ from app import TheiaApp
 from controllers.application_controller import ApplicationController
 from pathlib import Path
 
+def get_resource_path(relative_path: str) -> Path:
+    if getattr(sys, 'frozen', False):
+        return Path(sys._MEIPASS) / relative_path
+    return Path(__file__).parent.resolve() / relative_path
+
 def main():
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon(str(Path("assets/icon.jpg"))))
+    app.setWindowIcon(QIcon(str(get_resource_path("app_icon.ico"))))
     window = TheiaApp()
     controller = ApplicationController(window)
     window.show()

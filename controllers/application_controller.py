@@ -3,6 +3,7 @@
 import time
 from pathlib import Path
 from PyQt6.QtWidgets import QMessageBox, QFileDialog
+from PyQt6.QtCore import QStandardPaths
 
 from workers.worker_thread import VideoProcessingWorker
 
@@ -60,10 +61,13 @@ class ApplicationController:
         output_ext = input_ext if input_ext in ("mp4", "mkv") else "mp4"
 
         # ── Prompt user for output save location ──
+        default_dir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.MoviesLocation)
+        default_path = str(Path(default_dir) / f"enhanced_video.{output_ext}")
+        
         output_path, _ = QFileDialog.getSaveFileName(
             self.main_window,
             "Save Enhanced Video",
-            f"enhanced_video.{output_ext}",
+            default_path,
             f"Video Files (*.{output_ext})"
         )
 
