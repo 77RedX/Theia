@@ -146,11 +146,13 @@ class AudioManager:
             "-y",
             "-i", str(video_path),
             "-i", str(audio_path),
-            "-c:v", "libx264",  # Re-encode video for compression
-            "-crf", "23",       # Balance between quality and file size
-            "-preset", "fast",  # Speed up compression
-            "-pix_fmt", "yuv420p", # Ensure wide compatibility
-            "-c:a", "copy",     # Copy audio stream without re-encoding
+            "-c:v", "libx264",      # Re-encode video for compression
+            "-crf", "23",           # Balance between quality and file size
+            "-preset", "fast",      # Speed up compression
+            "-pix_fmt", "yuv420p",   # Ensure wide compatibility
+            "-flags", "+global_header", # Write sequence headers globally to prevent h264 unref short errors
+            "-movflags", "+faststart",  # Move index header to start of file
+            "-c:a", "copy",         # Copy audio stream without re-encoding
             "-loglevel", "error",
             str(final_output_path)
         ]
@@ -191,6 +193,8 @@ class AudioManager:
             "-crf", "23",
             "-preset", "fast",
             "-pix_fmt", "yuv420p",
+            "-flags", "+global_header",
+            "-movflags", "+faststart",
             "-loglevel", "error",
             str(final_output_path)
         ]

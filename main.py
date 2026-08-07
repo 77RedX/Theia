@@ -1,12 +1,22 @@
 import sys
 import os
+from pathlib import Path
+
+# Add src to python path
 sys.path.insert(0, os.path.abspath("src"))
+
+# Set Windows AppUserModelID so taskbar displays custom app_icon.ico
+if sys.platform == 'win32':
+    import ctypes
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('theia.video.enhancer.desktop.1.0')
+    except Exception:
+        pass
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
 from app import TheiaApp
 from controllers.application_controller import ApplicationController
-from pathlib import Path
 
 def get_resource_path(relative_path: str) -> Path:
     if getattr(sys, 'frozen', False):
@@ -15,7 +25,10 @@ def get_resource_path(relative_path: str) -> Path:
 
 def main():
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon(str(get_resource_path("app_icon.ico"))))
+    icon_path = get_resource_path("app_icon.ico")
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
+        
     window = TheiaApp()
     controller = ApplicationController(window)
     window.show()

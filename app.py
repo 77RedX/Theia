@@ -1,33 +1,64 @@
+"""Main application window for Theia Video Enhancer Desktop Suite."""
+
 import math
+from pathlib import Path
+from PyQt6.QtWidgets import (
+    QMainWindow, QStackedWidget, QStatusBar, QWidget, QVBoxLayout, QHBoxLayout, QLabel
+)
+from PyQt6.QtGui import QFont, QResizeEvent, QIcon
+from PyQt6.QtCore import Qt, QSize
 
-from PyQt6.QtWidgets import QMainWindow, QStackedWidget
-from PyQt6.QtGui import QFont, QResizeEvent
-
+from styles.theme_manager import ThemeManager
 from screens.home_screen import HomeScreen
 from screens.processing_screen import ProcessingScreen
 from screens.comparison_screen import ComparisonScreen
+from screens.settings_screen import SettingsScreen
+from screens.queue_screen import QueueScreen
+from screens.models_screen import ModelManagerScreen
+from widgets.sidebar import Sidebar
+from widgets.title_bar import CustomTitleBar
+from widgets.components import StatusBadge
+
+class PlaceholderScreen(QWidget):
+    """Placeholder view for features under active development."""
+    def __init__(self, title: str):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl = QLabel(f"{title}\n\n(Work In Progress)")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setStyleSheet(f"font-size: 20px; color: {ThemeManager.TEXT_MUTED}; font-weight: bold;")
+        layout.addWidget(lbl)
 
 
 class TheiaApp(QMainWindow):
-    """Main application window for Theia Video Enhancer."""
+    """Main application shell for Theia Video Enhancer Desktop."""
 
-    # Baseline resolution the UI was designed for
-    _BASE_W, _BASE_H = 1200, 700
+    _BASE_W, _BASE_H = 1280, 760
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Theia Video Enhancer")
         self.resize(self._BASE_W, self._BASE_H)
-        self.setMinimumSize(900, 600)
+        self.setMinimumSize(960, 640)
+
+        # Set window icon from app_icon.ico
+        icon_path = Path(__file__).parent / "app_icon.ico"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+
+        # Frameless window configuration for modern custom title bar
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
 
         self._current_scale = 1.0
         self._apply_global_stylesheet(1.0)
         self.init_ui()
 
-    # ── Scaling ─────────────────────────────────────────────
+    # ── Metric Scaling ────────────────────────────────────────
 
     def _scale_factor(self) -> float:
-        """Compute scale factor from the current window size relative to baseline."""
+        """Compute relative UI scaling factor based on window dimensions."""
         w = self.width()
         h = self.height()
         diag = math.sqrt(w * w + h * h)
@@ -35,256 +66,121 @@ class TheiaApp(QMainWindow):
         return max(0.85, diag / base_diag)
 
     def resizeEvent(self, event: QResizeEvent):
-        """Recalculate scale and reapply stylesheet + screen layouts on resize."""
+        """Recalculate scale metrics and propagate to screens on window resize."""
         super().resizeEvent(event)
         new_scale = self._scale_factor()
-        # Only re-apply if scale changed meaningfully (avoids thrashing)
         if abs(new_scale - self._current_scale) > 0.02:
             self._current_scale = new_scale
             self._apply_global_stylesheet(new_scale)
-            # Notify screens so they can rescale their own metrics
-            for screen in (self.home_screen, self.processing_screen, self.comparison_screen):
+            
+            # Notify title bar and screens of metric changes
+            if hasattr(self, 'title_bar'):
+                self.title_bar.scale = new_scale
+            if hasattr(self, 'sidebar'):
+                self.sidebar.scale = new_scale
+
+            for screen in (
+                self.home_screen, self.processing_screen, self.comparison_screen, 
+                self.settings_screen, self.queue_screen, self.models_screen
+            ):
                 if hasattr(screen, 'apply_scale'):
                     screen.apply_scale(new_scale)
 
-    # ── Stylesheet ──────────────────────────────────────────
-
     def _apply_global_stylesheet(self, s: float):
-        """Apply a premium dark theme, with every metric scaled by *s*."""
-        # Helper to round-scale an int
-        def si(v):
-            return int(v * s)
+        """Apply dynamic QSS stylesheet generated from ThemeManager tokens."""
+        self.setStyleSheet(ThemeManager.generate_stylesheet(s))
 
-        self.setStyleSheet(f"""
-            /* ── Base ── */
-            QMainWindow {{
-                background-color: #0b0b12;
-            }}
-            QWidget {{
-                background-color: transparent;
-                font-family: "Segoe UI Variable", "Segoe UI", "Inter", "Roboto", sans-serif;
-            }}
-
-            /* ── Typography ── */
-            QLabel {{
-                color: #e2e8f0;
-                background: transparent;
-                font-size: {si(14)}px;
-            }}
-            QLabel#Title {{
-                color: #ffffff;
-                font-size: {si(36)}px;
-                font-weight: 800;
-            }}
-            QLabel#Subtitle {{
-                color: #94a3b8;
-                font-size: {si(16)}px;
-                font-weight: 500;
-            }}
-            QLabel#SectionTitle {{
-                color: #cbd5e1;
-                font-size: {si(15)}px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }}
-            QLabel#Muted {{
-                color: #64748b;
-                font-size: {si(13)}px;
-                font-weight: 500;
-            }}
-            QLabel#Accent {{
-                color: #a78bfa;
-                font-size: {si(16)}px;
-                font-weight: 700;
-            }}
-
-            /* ── Cards ── */
-            QFrame#CardPanel {{
-                background-color: #151522;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: {si(20)}px;
-            }}
-
-            /* ── Primary Buttons ── */
-            QPushButton {{
-                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #8b5cf6, stop:1 #6366f1);
-                color: #ffffff;
-                border: none;
-                border-radius: {si(12)}px;
-                padding: {si(14)}px {si(32)}px;
-                font-size: {si(15)}px;
-                font-weight: 700;
-                min-width: {si(160)}px;
-            }}
-            QPushButton:hover {{
-                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #a78bfa, stop:1 #818cf8);
-            }}
-            QPushButton:pressed {{
-                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #7c3aed, stop:1 #4f46e5);
-            }}
-            QPushButton:disabled {{
-                background-color: #334155;
-                color: #94a3b8;
-            }}
-
-            /* ── Secondary / Outline Buttons ── */
-            QPushButton#SecondaryButton {{
-                background-color: rgba(139, 92, 246, 0.1);
-                color: #a78bfa;
-                border: 1px solid rgba(139, 92, 246, 0.3);
-            }}
-            QPushButton#SecondaryButton:hover {{
-                background-color: rgba(139, 92, 246, 0.2);
-                border: 1px solid rgba(139, 92, 246, 0.5);
-            }}
-            QPushButton#SecondaryButton:pressed {{
-                background-color: rgba(139, 92, 246, 0.3);
-            }}
-
-            /* ── Danger Buttons ── */
-            QPushButton#DangerButton {{
-                background-color: rgba(239, 68, 68, 0.1);
-                color: #fca5a5;
-                border: 1px solid rgba(239, 68, 68, 0.3);
-            }}
-            QPushButton#DangerButton:hover {{
-                background-color: rgba(239, 68, 68, 0.2);
-                border: 1px solid rgba(239, 68, 68, 0.5);
-            }}
-
-            /* ── Progress Bar ── */
-            QProgressBar {{
-                border: none;
-                border-radius: {si(10)}px;
-                background-color: #1e1e2d;
-                min-height: {si(20)}px;
-                max-height: {si(20)}px;
-                text-align: center;
-                color: transparent;
-            }}
-            QProgressBar::chunk {{
-                border-radius: {si(10)}px;
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #ec4899, stop:0.5 #8b5cf6, stop:1 #3b82f6
-                );
-            }}
-
-            /* ── Combo Box ── */
-            QComboBox {{
-                background-color: #1e1e2d;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: {si(8)}px;
-                padding: {si(8)}px {si(16)}px;
-                color: #e2e8f0;
-                font-size: {si(14)}px;
-                font-weight: 500;
-                min-width: {si(150)}px;
-            }}
-            QComboBox:hover {{
-                border: 1px solid rgba(139, 92, 246, 0.5);
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                width: {si(30)}px;
-                subcontrol-position: right center;
-                subcontrol-origin: padding;
-            }}
-            QComboBox::down-arrow {{
-                image: url(assets/dropdown_arrow.svg);
-                width: {si(12)}px;
-                height: {si(12)}px;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: #151522;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: {si(8)}px;
-                color: #e2e8f0;
-                selection-background-color: #8b5cf6;
-                selection-color: #ffffff;
-                outline: none;
-                padding: {si(4)}px;
-                font-size: {si(14)}px;
-            }}
-
-            /* ── CheckBox ── */
-            QCheckBox {{
-                color: #cbd5e1;
-                font-size: {si(14)}px;
-                spacing: {si(10)}px;
-            }}
-            QCheckBox::indicator {{
-                width: {si(20)}px;
-                height: {si(20)}px;
-                border-radius: {si(6)}px;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                background-color: #151522;
-            }}
-            QCheckBox::indicator:hover {{
-                border: 1px solid #8b5cf6;
-            }}
-            QCheckBox::indicator:checked {{
-                background-color: #8b5cf6;
-                border: 1px solid #8b5cf6;
-            }}
-
-            /* ── Log / Terminal ── */
-            QTextEdit {{
-                background-color: #0d0d16;
-                color: #10b981;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-                border-radius: {si(12)}px;
-                padding: {si(16)}px;
-                font-family: "Cascadia Code", "Consolas", "Fira Code", monospace;
-                font-size: {si(14)}px;
-                selection-background-color: rgba(139, 92, 246, 0.4);
-            }}
-
-            /* ── Scrollbars ── */
-            QScrollBar:vertical {{
-                background: #0b0b12;
-                width: {si(10)}px;
-                border-radius: {si(5)}px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: #334155;
-                border-radius: {si(5)}px;
-                min-height: {si(40)}px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background: #475569;
-            }}
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {{
-                height: 0px;
-            }}
-        """)
+    # ── UI Construction ───────────────────────────────────────
 
     def init_ui(self):
-        """Initialize the central stacked widget and all screens."""
-        self.stacked_widget = QStackedWidget()
-        self.setCentralWidget(self.stacked_widget)
+        """Build the master frame layout: Title Bar -> Workspace Body (Sidebar + Stack) -> Status Bar."""
+        
+        # Central Main Widget Shell
+        self.main_container = QWidget(self)
+        self.setCentralWidget(self.main_container)
 
-        # Instantiate screens
+        self.root_layout = QVBoxLayout(self.main_container)
+        self.root_layout.setContentsMargins(0, 0, 0, 0)
+        self.root_layout.setSpacing(0)
+
+        # 1. Custom Title Bar Header
+        self.title_bar = CustomTitleBar(self, scale=self._current_scale)
+        self.root_layout.addWidget(self.title_bar)
+
+        # 2. Workspace Body Container
+        self.workspace_body = QWidget()
+        self.body_layout = QHBoxLayout(self.workspace_body)
+        self.body_layout.setContentsMargins(0, 0, 0, 0)
+        self.body_layout.setSpacing(0)
+
+        # Sidebar Navigation
+        self.sidebar = Sidebar(scale=self._current_scale)
+        self.body_layout.addWidget(self.sidebar)
+
+        # Central QStackedWidget View Matrix
+        self.stacked_widget = QStackedWidget()
+        self.body_layout.addWidget(self.stacked_widget, stretch=1)
+
+        self.root_layout.addWidget(self.workspace_body, stretch=1)
+
+        # Instantiate Passive Workspace Screens
         self.home_screen = HomeScreen()
         self.processing_screen = ProcessingScreen()
         self.comparison_screen = ComparisonScreen()
+        self.settings_screen = SettingsScreen()
+        self.queue_screen = QueueScreen()
+        self.models_screen = ModelManagerScreen()
+        self.placeholder_screen = PlaceholderScreen("Module Coming Soon")
 
-        # Add screens to stacked widget
-        self.stacked_widget.addWidget(self.home_screen)
-        self.stacked_widget.addWidget(self.processing_screen)
-        self.stacked_widget.addWidget(self.comparison_screen)
+        # Register Screens in Stack
+        self.stacked_widget.addWidget(self.home_screen)          # Index 0
+        self.stacked_widget.addWidget(self.processing_screen)    # Index 1
+        self.stacked_widget.addWidget(self.comparison_screen)    # Index 2
+        self.stacked_widget.addWidget(self.settings_screen)      # Index 3
+        self.stacked_widget.addWidget(self.queue_screen)         # Index 4
+        self.stacked_widget.addWidget(self.models_screen)        # Index 5
+        self.stacked_widget.addWidget(self.placeholder_screen)   # Index 6
+
+        # 3. Modern Status Bar Footer
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage("Engine Status: Ready")
+
+    # ── Workspace Switching API ───────────────────────────────
 
     def show_home(self):
-        """Switch to the Home Screen."""
+        """Switch view to Project Dashboard."""
         self.stacked_widget.setCurrentWidget(self.home_screen)
+        self.sidebar.set_active("dashboard")
 
     def show_processing(self):
-        """Switch to the Processing Screen."""
-        self.processing_screen.reset()
+        """Switch view to Processing Command Center."""
         self.stacked_widget.setCurrentWidget(self.processing_screen)
+        self.sidebar.set_active("command_center")
+
+    def show_command_center(self):
+        """Alias for show_processing."""
+        self.show_processing()
 
     def show_comparison(self):
-        """Switch to the Comparison Screen."""
+        """Switch view to Review & Comparison Workspace."""
         self.stacked_widget.setCurrentWidget(self.comparison_screen)
+
+    def show_settings(self):
+        """Switch view to Settings Panel."""
+        self.stacked_widget.setCurrentWidget(self.settings_screen)
+        self.sidebar.set_active("settings")
+
+    def show_queue(self):
+        """Switch view to Batch Queue workspace."""
+        self.stacked_widget.setCurrentWidget(self.queue_screen)
+        self.sidebar.set_active("queue")
+
+    def show_models(self):
+        """Switch view to Model Manager workspace."""
+        self.stacked_widget.setCurrentWidget(self.models_screen)
+        self.sidebar.set_active("models")
+
+    def show_placeholder(self):
+        """Switch view to generic placeholder."""
+        self.stacked_widget.setCurrentWidget(self.placeholder_screen)

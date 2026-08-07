@@ -74,8 +74,12 @@ class VideoProcessingWorker(QThread):
                 self.processing_finished.emit(True, "")
 
         except InterruptedError:
+            self.log_message.emit("Pipeline stopped due to user cancellation.")
             self.processing_finished.emit(False, "Processing cancelled by user.")
         except Exception as e:
             tb = traceback.format_exc()
             self.log_message.emit(f"ERROR: {e}")
             self.processing_finished.emit(False, str(e))
+        finally:
+            # Ensure QThread loop terminates cleanly
+            self.quit()
